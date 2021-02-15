@@ -15,11 +15,11 @@ import json
 '''
 lisbon_net = ox.graph.graph_from_address(
     'lisbon', 
-    dist=6000,
+    dist=12500,
     retain_all=False,
-    network_type='drive',
+    network_type='drive_service',
     simplify=True,
-    dist_type='bbox'
+    dist_type='network'
 )
 
 '''
