@@ -14,12 +14,12 @@ import json
 | MultiDiGraph
 '''
 lisbon_net = ox.graph.graph_from_address(
-    'lisbon', 
-    dist=12500,
-    retain_all=False,
-    network_type='drive_service',
-    simplify=True,
-    dist_type='network'
+	'lisbon', 
+	dist=12500,
+	retain_all=False,
+	network_type='drive_service',
+	simplify=True,
+	dist_type='network'
 )
 
 '''
@@ -73,7 +73,7 @@ nodes_list = []
 links_list = []
 
 for node in json_data['nodes']:
-    nodes_list.append([node['x'], node['y']])
+	nodes_list.append([node['x'], node['y']])
 
 '''
 | The links are represented as a shapely Multiline, I'm
@@ -81,29 +81,29 @@ for node in json_data['nodes']:
 | is in order with the geojson standart.
 '''
 for index, adjacencies in enumerate(json_data['adjacency']):
-    for link in adjacencies:
-        if 'geometry' in link:
-            links_list.append([[x, y] for x, y in link['geometry'].coords])
-        else:
-            '''
-            | Whenever a road segment has no curves, i.e. it is only
-            | a line, no coordinates are used, instead it is implied
-            | that we are connecting the origin node with the node
-            | identified by 'id'. This else statment handles that.
-            '''
-            destiny_item = list(filter(lambda item: item['id']==link['id'], json_data['nodes']))[0]
-            origin  = [json_data['nodes'][index]['x'], json_data['nodes'][index]['y']]
-            destiny = [destiny_item['x'], destiny_item['y']]
-            links_list.append([origin, destiny])
+	for link in adjacencies:
+		if 'geometry' in link:
+			links_list.append([[x, y] for x, y in link['geometry'].coords])
+		else:
+			'''
+			| Whenever a road segment has no curves, i.e. it is only
+			| a line, no coordinates are used, instead it is implied
+			| that we are connecting the origin node with the node
+			| identified by 'id'. This else statment handles that.
+			'''
+			destiny_item = list(filter(lambda item: item['id']==link['id'], json_data['nodes']))[0]
+			origin  = [json_data['nodes'][index]['x'], json_data['nodes'][index]['y']]
+			destiny = [destiny_item['x'], destiny_item['y']]
+			links_list.append([origin, destiny])
 
 nodes = {
-    'type': 'MultiPoint',
-    'coordinates': nodes_list
+	'type': 'MultiPoint',
+	'coordinates': nodes_list
 }
 
 links = {
-    'type': 'MultiLineString',
-    'coordinates': links_list
+	'type': 'MultiLineString',
+	'coordinates': links_list
 }
 
 with open('data/lisbon_net_nodes.geojson', 'w') as json_file:

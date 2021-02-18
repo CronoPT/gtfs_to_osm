@@ -13,19 +13,19 @@ df = pd.read_csv('data/carris_gtfs/shapes.txt', sep=',', decimal='.')
 lines = []
 
 for shape in df['shape_id'].unique():
-    sequence = df[ df['shape_id']==shape ]
-    sequence.sort_values('shape_pt_sequence')
-    
-    line = []
+	sequence = df[ df['shape_id']==shape ]
+	sequence.sort_values('shape_pt_sequence')
+	
+	line = []
 
-    for _, row in sequence.iterrows():
-        line.append([row['shape_pt_lon'], row['shape_pt_lat']])
+	for _, row in sequence.iterrows():
+		line.append([row['shape_pt_lon'], row['shape_pt_lat']])
 
-    lines.append(line)
+	lines.append(line)
 
 json_data = {
-    'type': 'MultiLineString',
-    'coordinates': lines
+	'type': 'MultiLineString',
+	'coordinates': lines
 }
 
 with open('data/lisbon_line_shapes_gtfs.geojson', 'w') as json_file:

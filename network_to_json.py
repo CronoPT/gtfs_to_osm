@@ -14,12 +14,12 @@ import json
 | MultiDiGraph.
 '''
 lisbon_net = ox.graph.graph_from_address(
-    'lisbon', 
-    dist=12500,
-    retain_all=False,
-    network_type='drive_service',
-    simplify=True,
-    dist_type='network'
+	'lisbon', 
+	dist=12500,
+	retain_all=False,
+	network_type='drive_service',
+	simplify=True,
+	dist_type='network'
 )
 
 '''
