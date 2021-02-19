@@ -211,7 +211,7 @@ def test_lines_intersect():
 	print('Line J and I intercect      {}'.format('[OK]' if lines_intersect(line_j, line_i) else '[FAILED]'))
 
 
-def fill_structures(origin, destin, struct):
+def fill_structures(origin, destin, struct, or_id, de_id):
 	'''
 	| This function will sort every road segment into the squares
 	| on the grid that it spans.
@@ -225,7 +225,11 @@ def fill_structures(origin, destin, struct):
 
 	# if the origin and destiny are in the same square, that's the only square affected
 	if or_x==de_x and or_y==de_y:
-		struct[or_x][or_y]['links'].append([origin, destin])
+		struct[or_x][or_y]['links'].append({
+			'segment':   [origin, destin],
+			'origin_id': or_id,
+			'destin_id': de_id
+		})
 		return
 
 	curr_x, curr_y = or_x, or_y
@@ -270,7 +274,11 @@ def fill_structures(origin, destin, struct):
 				moved   = True
 
 		moved = False
-		struct[curr_x][curr_y]['links'].append([origin, destin])
+		struct[curr_x][curr_y]['links'].append({
+			'segment':   [origin, destin],
+			'origin_id': or_id,
+			'destin_id': de_id
+		})
 
 
 if __name__ == '__main__':
@@ -332,19 +340,22 @@ if __name__ == '__main__':
 			| sorting it by the squares it spans. The function that 
 			| does the main job is 'fill_structures'.
 			'''
+
+			destin_item = list(filter(lambda item: item['id']==link['id'], net['nodes']))[0]
+			or_id = net['nodes'][index]['id']
+			de_id = destin_item['id']
 			if 'geometry' in link:
 				origin = None
 				destin = None
 				for coords in link['geometry']:
 					destin = coords
 					if origin != None:
-						fill_structures(origin, destin, bounds)
+						fill_structures(origin, destin, bounds, or_id, de_id)
 					origin = destin
 			else:
-				destin_item = list(filter(lambda item: item['id']==link['id'], net['nodes']))[0]
 				origin = [net['nodes'][index]['x'], net['nodes'][index]['y']]
 				destin = [destin_item['x'], destin_item['y']]
-				fill_structures(origin, destin, bounds)
+				fill_structures(origin, destin, bounds, or_id, de_id)
 
 	print_progress_bar(len(net['adjacency']), len(net['adjacency']), prefix='[MAPPING]')
 
@@ -394,12 +405,18 @@ if __name__ == '__main__':
 
 		for candidate in candidate_coords:
 			for segment in bounds[candidate[0]][candidate[1]]['links']:
-				closest  = closest_point(segment[0], segment[1], stp)
+				closest  = closest_point(
+					segment['segment'][0], 
+					segment['segment'][1], 
+					stp
+				)
 				distance = haversine_distance(stp, closest)*1000
 				if distance < THRESHOLD:
 					pjs.append({
 						'point': closest,
-						'distance': distance
+						'distance':  distance,
+						'origin_id': segment['origin_id'],
+						'destin_id': segment['destin_id']
 					})
 
 		'''
