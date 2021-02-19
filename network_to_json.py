@@ -69,9 +69,9 @@ lisbon_net = ox.graph.graph_from_address(
 '''
 json_data  = nx.readwrite.json_graph.adjacency_data(lisbon_net)
 
-json_data.pop('directed')
-json_data.pop('multigraph')
-json_data.pop('graph')
+# json_data.pop('directed')
+# json_data.pop('multigraph')
+# json_data.pop('graph')
 
 '''
 | The links are represented as a shapely Multiline, I'm

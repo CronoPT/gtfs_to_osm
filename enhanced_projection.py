@@ -211,7 +211,7 @@ def test_lines_intersect():
 	print('Line J and I intercect      {}'.format('[OK]' if lines_intersect(line_j, line_i) else '[FAILED]'))
 
 
-def fill_structures(origin, destin, struct, or_id, de_id):
+def fill_structures(origin, destin, struct, or_id, de_id, key):
 	'''
 	| This function will sort every road segment into the squares
 	| on the grid that it spans.
@@ -228,7 +228,8 @@ def fill_structures(origin, destin, struct, or_id, de_id):
 		struct[or_x][or_y]['links'].append({
 			'segment':   [origin, destin],
 			'origin_id': or_id,
-			'destin_id': de_id
+			'destin_id': de_id,
+			'key': key
 		})
 		return
 
@@ -277,9 +278,15 @@ def fill_structures(origin, destin, struct, or_id, de_id):
 		struct[curr_x][curr_y]['links'].append({
 			'segment':   [origin, destin],
 			'origin_id': or_id,
-			'destin_id': de_id
+			'destin_id': de_id,
+			'key': key
 		})
 
+
+def edge_key_from(or_id, de_id, net):
+	or_index = [index for index, node in enumerate(net['nodes']) if node['id']==or_id][0]
+	key = [item['key'] for item in net['adjacency'][or_index] if item['id']==de_id][0]
+	return key
 
 if __name__ == '__main__':
 	'''
@@ -344,18 +351,19 @@ if __name__ == '__main__':
 			destin_item = list(filter(lambda item: item['id']==link['id'], net['nodes']))[0]
 			or_id = net['nodes'][index]['id']
 			de_id = destin_item['id']
+			key   = edge_key_from(or_id, de_id, net)
 			if 'geometry' in link:
 				origin = None
 				destin = None
 				for coords in link['geometry']:
 					destin = coords
 					if origin != None:
-						fill_structures(origin, destin, bounds, or_id, de_id)
+						fill_structures(origin, destin, bounds, or_id, de_id, key)
 					origin = destin
 			else:
 				origin = [net['nodes'][index]['x'], net['nodes'][index]['y']]
 				destin = [destin_item['x'], destin_item['y']]
-				fill_structures(origin, destin, bounds, or_id, de_id)
+				fill_structures(origin, destin, bounds, or_id, de_id, key)
 
 	print_progress_bar(len(net['adjacency']), len(net['adjacency']), prefix='[MAPPING]')
 
@@ -416,7 +424,8 @@ if __name__ == '__main__':
 						'point': closest,
 						'distance':  distance,
 						'origin_id': segment['origin_id'],
-						'destin_id': segment['destin_id']
+						'destin_id': segment['destin_id'],
+						'key': segment['key']
 					})
 
 		'''
