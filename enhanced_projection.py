@@ -35,9 +35,10 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
 
 
 def closest_point(a, b, p):
-	'''                                     __
-	| This function finds the point outside ab 
-	| that is closest to point p.
+	'''                                __
+	| This function finds the point in ab 
+	| that is closest to point p (outside
+	| the line segment).
 	'''
 
 	a = np.array(a)
@@ -282,12 +283,6 @@ def fill_structures(origin, destin, struct, or_id, de_id, key):
 			'key': key
 		})
 
-
-def edge_key_from(or_id, de_id, net):
-	or_index = [index for index, node in enumerate(net['nodes']) if node['id']==or_id][0]
-	key = [item['key'] for item in net['adjacency'][or_index] if item['id']==de_id][0]
-	return key
-
 if __name__ == '__main__':
 	'''
 	| The value within which we will look for projected 
@@ -351,7 +346,7 @@ if __name__ == '__main__':
 			destin_item = list(filter(lambda item: item['id']==link['id'], net['nodes']))[0]
 			or_id = net['nodes'][index]['id']
 			de_id = destin_item['id']
-			key   = edge_key_from(or_id, de_id, net)
+			key   = 0 if 'key' not in link else link['key'] 
 			if 'geometry' in link:
 				origin = None
 				destin = None

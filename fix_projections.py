@@ -55,7 +55,7 @@ def haversine_distance(a, b):
 
 
 def point_belongs_to_line(point, line):
-	tolerance = 0.001
+	tolerance = 0.00000001
 
 	point  = np.array(point)
 	line_point_1 = np.array(line[0])
