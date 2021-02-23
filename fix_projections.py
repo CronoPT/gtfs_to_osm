@@ -55,6 +55,12 @@ def haversine_distance(a, b):
 
 
 def point_belongs_to_line(point, line):
+	'''
+	| Return true if 'point' belongs to the 'line' and 
+	| false otherwise.
+	| As we are working with floating point numbers, a
+	| small tolerance is allowed.
+	'''
 	tolerance = 0.00000001
 
 	point  = np.array(point)
@@ -69,6 +75,17 @@ def point_belongs_to_line(point, line):
 
 
 def compute_distance_to_or_and_de(point, coords):
+	'''
+	| This function will see where the 'point' belongs
+	| in the geometry (line) defined by the sequence
+	| of coordinate pairs in 'coords'. This function
+	| will also compute the distance in the road between 
+	| the origin of the line and the point and between
+	| the point and the destiny of the line as well as 
+	| the lines (geometries) that connect the origin to 
+	| the new point and the new point to the destiny. 
+	'''
+
 	distance_to_or = 0
 	distance_to_de = 0
 	or_geometry = []
@@ -101,6 +118,11 @@ def compute_distance_to_or_and_de(point, coords):
 
 
 def update_observer_edge(new_edge, observer):
+	'''
+	| If observer shares some point with the newly
+	| introduced edge, the observer must be updated.
+	'''
+
 	if observer['origin_id'] == new_edge['origin']:
 		observer['destin_id'] = new_edge['destin']
 	elif observer['destin_id'] == new_edge['destin']:
@@ -108,6 +130,24 @@ def update_observer_edge(new_edge, observer):
 
 
 def insert_point_as_node(net, node_id, point_info, observers=[]):
+	'''
+	| This function makes a random point on the road network a node
+	| in the network so that we can compute shortest path between
+	| that point and others.
+	| @params:
+	|	net        - Required : the road network (nx.MultiDiGraph)
+	| 	node_id    - Required : the node id to give to the point in 
+	| the network (Int)
+	|	point_info - Required : a dicionairy containing information 
+	| about where to place the new node, between which nodes, in
+	| which edge (Dict)  
+	|	observers  - Optional : a list of other point_infos to be 
+	| updated, essentially you will be deviding some edge in two
+	| by placing a new node in the middle, this makes it so that
+	| the pair of nodes between which other points are to be
+	| introduced will change (List)
+	'''
+
 	edge_to_intersect = net.get_edge_data(
 		point_info['origin_id'], 
 		point_info['destin_id'],
@@ -240,7 +280,7 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 	'''
 	| The idea of this function is to compute the distance between 
 	| two arbitrary points in the road network. They may not be nodes
-	| but a point in the middle of a road segment, hence the trickyness 
+	| but a point in the middle of a road segment, hence the trickyness. 
 	'''
 
 	global DEL
@@ -275,6 +315,13 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 
 if __name__ == '__main__':
 
+	'''
+	| We will be introducing points in the network iterativelly,
+	| to avoid having to read the network from a json file
+	| at every iteration, this structures will allow us to track
+	| any changes made to the network and undo them once we are
+	| done, making the whole script run much faster.
+	'''
 	DEL = {'nodes': [], 'links': []}
 	ADD = {'nodes': [], 'links': []}
 
@@ -398,13 +445,16 @@ if __name__ == '__main__':
 				origin_node_id = p_nodes[tuple_origin_point]
 				destin_node_id = p_nodes[tuple_destin_point]
 
-				p_graph_edges.append((origin_node_id, destin_node_id, {
-					'length': compute_distance_on_road_between(
-						road_net,
-						copy.copy(origin_projection), 
-						copy.copy(destin_projection)
-					)
-				}))
+				length = compute_distance_on_road_between(
+					road_net,
+					copy.copy(origin_projection), 
+					copy.copy(destin_projection)
+				)
+
+				if length != -1:
+					p_graph_edges.append((origin_node_id, destin_node_id, {
+						'length': length
+					}))
 
 	print_progress_bar(len(Gg.edges), len(Gg.edges), prefix='[P GRAPH BUILD]')
 
