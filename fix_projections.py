@@ -332,77 +332,68 @@ if __name__ == '__main__':
 	road_net = nx.readwrite.json_graph.adjacency_graph(network_json)
 
 	stops_df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
-	route_df = pd.read_csv('data/carris_gtfs/shapes.txt', sep=',', decimal='.')
+	route_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
 
 	file = open('data/lisbon_net_data.json', 'r')
 	net  = json.load(file)
 	file.close() 
 
-	stop_ids = []
-	not_stop = []
+	route_ids = []
+	stop_ids  = []
 	for index, row in route_df.iterrows():
-		print_progress_bar(index, route_df.shape[0], prefix='[STOP CHECK]   ')
-
-		lat = row['shape_pt_lat']
-		lon = row['shape_pt_lon']
-		res = stops_df.loc[(stops_df['stop_lat']==lat) & (stops_df['stop_lon']==lon)]
-		if res.shape[0] > 0:
-			stop_ids.append(res.iloc[0]['stop_id'])
-		else:
-			stop_ids.append('Not Stop')
-			not_stop.append([lon, lat])
-	
-	print_progress_bar(route_df.shape[0], route_df.shape[0], prefix='[STOP CHECK]   ')
-
-	route_df['stop_id'] = stop_ids
-	route_df = route_df[route_df['stop_id']!='Not Stop']
+		print_progress_bar(index, route_df.shape[0], prefix='[STOP CHECK]    1/3')
+		route_ids.append('{}{}{}'.format(row['carreira'], row['sentido'], row['variante']))
+		stop_ids.append(int(row['cod_paragem']))
+	print_progress_bar(route_df.shape[0], route_df.shape[0], prefix='[STOP CHECK]    1/3')
+	route_df['shape_id'] = route_ids 
+	route_df['stop_id']  = stop_ids
 
 	nodes = {}
 	graph_edges = []
 
 	for index, shape in enumerate(route_df['shape_id'].unique()):
-		print_progress_bar(index, len(route_df['shape_id'].unique()), prefix='[GRAPH BUILD]  ')
+		print_progress_bar(index, len(route_df['shape_id'].unique()), prefix='[GRAPH BUILD]   2/3')
 
 		sequence = route_df[ route_df['shape_id']==shape ]
-		sequence.sort_values('shape_pt_sequence')
+		sequence.sort_values('n_ordem')
 
 		prev = None
 		for _, row in sequence.iterrows():
-			lon = row['shape_pt_lon']
-			lat = row['shape_pt_lat']
+			lon = row['longitude']
+			lat = row['latitude']
 			stop_id = row['stop_id']
 			coords  = (lon, lat)
 			curr    = None 
 
-			if coords not in nodes:
+			if stop_id not in nodes:
 				curr = {
-					'id':  len(nodes),
+					'stop_id': stop_id,
 					'lon': lon,
 					'lat': lat,
-					'stop_id': stop_id
 				}
-				nodes[coords] = curr
+				nodes[stop_id] = curr
 			else:
-				curr = nodes[coords]
+				curr = nodes[stop_id]
 
 			if prev != None:
-				graph_edges.append((prev['id'], curr['id']))
+				graph_edges.append((prev['stop_id'], curr['stop_id']))
 
 			prev = curr
 	
-	print_progress_bar(len(route_df['shape_id'].unique()), 
-	                   len(route_df['shape_id'].unique()), 
-					   prefix='[GRAPH BUILD]  ')
+	print_progress_bar(
+		len(route_df['shape_id'].unique()), 
+		len(route_df['shape_id'].unique()), 
+		prefix='[GRAPH BUILD]   2/3'
+	)
 
 	graph_nodes = []
 	for _, obj in nodes.items():
-		graph_nodes.append((obj['id'], {
+		graph_nodes.append((obj['stop_id'], {
 			'lon': obj['lon'],
 			'lat': obj['lat'],
-			'stop_id': obj['stop_id']
 		}))
 
-	Gg = nx.Graph()
+	Gg = nx.DiGraph()
 	Gg.add_nodes_from(graph_nodes)
 	Gg.add_edges_from(graph_edges)
 
@@ -413,17 +404,15 @@ if __name__ == '__main__':
 	p_nodes = {}
 	p_graph_edges = []
 
+	g_p_mappings = {item['stop_id']: [] for item in mappings}
+
 	node_lon = nx.get_node_attributes(Gg, 'lon')
 	node_lat = nx.get_node_attributes(Gg, 'lat')
-	node_stop_ids = nx.get_node_attributes(Gg, 'stop_id')
 	for index, edge in enumerate(Gg.edges):
-		print_progress_bar(index, len(Gg.edges), prefix='[P GRAPH BUILD]')
+		print_progress_bar(index, len(Gg.edges), prefix='[P GRAPH BUILD] 3/3')
 
-		origin = edge[0]
-		destin = edge[1]
-
-		origin_stop_id = node_stop_ids[origin]
-		destin_stop_id = node_stop_ids[destin]
+		origin_stop_id = edge[0]
+		destin_stop_id = edge[1]
 
 		origin_map_item = list(filter(lambda item: item['stop_id']==origin_stop_id, mappings))[0]
 		destin_map_item = list(filter(lambda item: item['stop_id']==destin_stop_id, mappings))[0]
@@ -438,10 +427,14 @@ if __name__ == '__main__':
 
 				if tuple_origin_point not in p_nodes:
 					p_nodes[tuple_origin_point] = len(p_nodes)
+				if p_nodes[tuple_origin_point] not in g_p_mappings[origin_stop_id]:
+					g_p_mappings[origin_stop_id].append(p_nodes[tuple_origin_point])
 
 				if tuple_destin_point not in p_nodes:
 					p_nodes[tuple_destin_point] = len(p_nodes)
-				
+				if p_nodes[tuple_destin_point] not in g_p_mappings[destin_stop_id]:
+					g_p_mappings[destin_stop_id].append(p_nodes[tuple_destin_point])
+
 				origin_node_id = p_nodes[tuple_origin_point]
 				destin_node_id = p_nodes[tuple_destin_point]
 
@@ -456,7 +449,7 @@ if __name__ == '__main__':
 						'length': length
 					}))
 
-	print_progress_bar(len(Gg.edges), len(Gg.edges), prefix='[P GRAPH BUILD]')
+	print_progress_bar(len(Gg.edges), len(Gg.edges), prefix='[P GRAPH BUILD] 3/3')
 
 	p_graph_nodes = []
 	for coords, node_id in p_nodes.items():
@@ -465,9 +458,17 @@ if __name__ == '__main__':
 			'lat': coords[1]
 		}))
 				
-	Gp = nx.Graph()
+	Gp = nx.DiGraph()
 	Gp.add_nodes_from(p_graph_nodes)
 	Gp.add_edges_from(p_graph_edges)
+
+	# __characterization = {i:0 for i in range(21)}
+	# for stop_id, projections in g_p_mappings.items():
+	# 	__characterization[len(projections)] += 1
+	# 	if len(projections) == 0:
+	# 		print('This is the one -> {}'.format(stop_id))
+	# for i, j in __characterization.items():
+	# 	print('{} -> {}'.format(i, j))
 
 	stop_graph = nx.readwrite.json_graph.adjacency_data(Gg)
 	with open('data/stop_graph_data.json', 'w') as json_file:

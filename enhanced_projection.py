@@ -323,6 +323,17 @@ if __name__ == '__main__':
 
 	stops_df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
 	route_df = pd.read_csv('data/carris_gtfs/shapes.txt', sep=',', decimal='.')
+	outub_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
+
+	stops = []
+	for stop in outub_df['cod_paragem'].unique():
+		res = outub_df[ outub_df['cod_paragem']==stop ]
+		row = res.iloc[0]
+		stops.append({
+			'stop_id': int(row['cod_paragem']),
+			'lat': float(row['latitude']),
+			'lon': float(row['longitude'])
+		})
 
 	for x in range(DIVISIONS):
 		for y in range(DIVISIONS):
@@ -335,7 +346,7 @@ if __name__ == '__main__':
 			}
 
 	for index, adjacencies in enumerate(net['adjacency']):
-		print_progress_bar(index, len(net['adjacency']), prefix='[MAPPING]')
+		print_progress_bar(index, len(net['adjacency']), prefix='[MAPPING] 1/2')
 		for link in adjacencies:
 			'''
 			| Here we are just iterating over every road segment and 
@@ -360,10 +371,10 @@ if __name__ == '__main__':
 				destin = [destin_item['x'], destin_item['y']]
 				fill_structures(origin, destin, bounds, or_id, de_id, key)
 
-	print_progress_bar(len(net['adjacency']), len(net['adjacency']), prefix='[MAPPING]')
+	print_progress_bar(len(net['adjacency']), len(net['adjacency']), prefix='[MAPPING] 1/2')
 
 	stop_mappings = []
-	for index, row in stops_df.iterrows():
+	for index, stop in enumerate(stops):
 		'''
 		| Now we well actually project the stations on the road.
 		| The whole process of sorting the segments in squares is
@@ -372,10 +383,10 @@ if __name__ == '__main__':
 		| instead of the whole network.
 		'''
 
-		print_progress_bar(index, stops_df.shape[0], prefix='[PROJECT]')
+		print_progress_bar(index, len(stops), prefix='[PROJECT] 2/2')
 
-		lat = row['stop_lat']
-		lon = row['stop_lon']
+		lat = stop['lat']
+		lon = stop['lon']
 		stp = [lon, lat]
 		pjs = [] 
 
@@ -406,22 +417,25 @@ if __name__ == '__main__':
 		if stp_x<DIVISIONS-1 and stp_y>0:
 			candidate_coords.append([stp_x+1, stp_y-1])
 
-		for candidate in candidate_coords:
-			for segment in bounds[candidate[0]][candidate[1]]['links']:
-				closest  = closest_point(
-					segment['segment'][0], 
-					segment['segment'][1], 
-					stp
-				)
-				distance = haversine_distance(stp, closest)*1000
-				if distance < THRESHOLD:
-					pjs.append({
-						'point': closest,
-						'distance':  distance,
-						'origin_id': segment['origin_id'],
-						'destin_id': segment['destin_id'],
-						'key': segment['key']
-					})
+		added_thresh = 0
+		while len(pjs) == 0:
+			for candidate in candidate_coords:
+				for segment in bounds[candidate[0]][candidate[1]]['links']:
+					closest  = closest_point(
+						segment['segment'][0], 
+						segment['segment'][1], 
+						stp
+					)
+					distance = haversine_distance(stp, closest)*1000
+					if distance < THRESHOLD+added_thresh:
+						pjs.append({
+							'point': closest,
+							'distance':  distance,
+							'origin_id': segment['origin_id'],
+							'destin_id': segment['destin_id'],
+							'key': segment['key']
+						})
+			added_thresh += 15
 
 		'''
 		| Because of the indexing by square on the grid, some
@@ -436,12 +450,12 @@ if __name__ == '__main__':
 				points_in_filtered.append(pj['point'])
 
 		stop_mappings.append({
-			'stop_id':  row['stop_id'],
+			'stop_id':  stop['stop_id'],
 			'point':    stp,
 			'mappings': filtered_pjs
 		})
 
-	print_progress_bar(stops_df.shape[0], stops_df.shape[0], prefix='[PROJECT]')
+	print_progress_bar(len(stops), len(stops), prefix='[PROJECT] 2/2')
 
 	with open('data/stop_mappings.json', 'w') as json_file:
 		json.dump(stop_mappings, json_file, indent=4)
