@@ -313,6 +313,48 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 	return distance
 
 
+def handle_triplets(Gg, Gp, gp_mappings):
+	
+	for node in Gg.nodes():
+		in_deg  = Gg.in_degree(node)
+		out_deg = Gg.out_degree(node)
+		projections = gp_mappings[node]
+
+		if in_deg==1 and out_deg==1 and len(projections)>1:
+			in_edge  = Gg.in_edges(node)
+			out_edge = Gg.out_edges(node)
+
+			before_node = [u for u, _ in in_edge ][0]
+			after_node  = [v for _, v in out_edge][0]
+
+			this_mappings   = gp_mappings[node]
+			before_mappings = gp_mappings[before_node] 
+			after_mappings  = gp_mappings[after_node]
+
+			total_paths = len(before_mappings)*len(after_mappings)
+
+			path_counting = {p_node:0 for p_node in this_mappings} 
+			for before_map in before_mappings:
+				for after_map in after_mappings:
+					try:
+						path = nx.dijkstra_path(Gp, before_map, after_map, weight='length')
+					except nx.NetworkXNoPath:
+						total_paths -= 1
+						continue 
+					for p_node in this_mappings:
+						if p_node in path:
+							path_counting[p_node] += 1
+
+			for p_node, count in path_counting.items():
+				if count==0:
+					gp_mappings[node].remove(p_node)
+					Gp.remove_node(p_node)
+				elif count==total_paths:
+					gp_mappings[node] = [p_node]
+					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
+					break
+
+
 if __name__ == '__main__':
 
 	'''
@@ -401,10 +443,22 @@ if __name__ == '__main__':
 	mappings = json.load(file)
 	file.close() 
 
-	p_nodes = {}
+	p_graph_nodes = []
 	p_graph_edges = []
 
-	g_p_mappings = {item['stop_id']: [] for item in mappings}
+	gp_mappings = {}
+	counter     = 0
+	for map_item in mappings:
+		stop_id = map_item['stop_id']
+		gp_mappings[stop_id] = []
+		for projection in map_item['mappings']:
+			gp_mappings[stop_id].append(counter)
+			p_graph_nodes.append((counter ,{
+				'lon': projection['point'][0],
+				'lat': projection['point'][1]
+			}))
+
+			counter += 1
 
 	node_lon = nx.get_node_attributes(Gg, 'lon')
 	node_lat = nx.get_node_attributes(Gg, 'lat')
@@ -417,26 +471,16 @@ if __name__ == '__main__':
 		origin_map_item = list(filter(lambda item: item['stop_id']==origin_stop_id, mappings))[0]
 		destin_map_item = list(filter(lambda item: item['stop_id']==destin_stop_id, mappings))[0]
 
-		for origin_projection in origin_map_item['mappings']:
-			for destin_projection in destin_map_item['mappings']:
+		for or_index, origin_projection in enumerate(origin_map_item['mappings']):
+			for de_index, destin_projection in enumerate(destin_map_item['mappings']):
 				origin_point = origin_projection['point']
 				destin_point = destin_projection['point']
 
 				tuple_origin_point = origin_point[0], origin_point[1]
 				tuple_destin_point = destin_point[0], destin_point[1]
 
-				if tuple_origin_point not in p_nodes:
-					p_nodes[tuple_origin_point] = len(p_nodes)
-				if p_nodes[tuple_origin_point] not in g_p_mappings[origin_stop_id]:
-					g_p_mappings[origin_stop_id].append(p_nodes[tuple_origin_point])
-
-				if tuple_destin_point not in p_nodes:
-					p_nodes[tuple_destin_point] = len(p_nodes)
-				if p_nodes[tuple_destin_point] not in g_p_mappings[destin_stop_id]:
-					g_p_mappings[destin_stop_id].append(p_nodes[tuple_destin_point])
-
-				origin_node_id = p_nodes[tuple_origin_point]
-				destin_node_id = p_nodes[tuple_destin_point]
+				origin_node_id = gp_mappings[origin_stop_id][or_index]
+				destin_node_id = gp_mappings[destin_stop_id][de_index]
 
 				length = compute_distance_on_road_between(
 					road_net,
@@ -450,25 +494,24 @@ if __name__ == '__main__':
 					}))
 
 	print_progress_bar(len(Gg.edges), len(Gg.edges), prefix='[P GRAPH BUILD] 3/3')
-
-	p_graph_nodes = []
-	for coords, node_id in p_nodes.items():
-		p_graph_nodes.append((node_id, {
-			'lon': coords[0],
-			'lat': coords[1]
-		}))
 				
 	Gp = nx.DiGraph()
 	Gp.add_nodes_from(p_graph_nodes)
 	Gp.add_edges_from(p_graph_edges)
 
 	# __characterization = {i:0 for i in range(21)}
-	# for stop_id, projections in g_p_mappings.items():
+	# for stop_id, projections in gp_mappings.items():
 	# 	__characterization[len(projections)] += 1
 	# 	if len(projections) == 0:
 	# 		print('This is the one -> {}'.format(stop_id))
 	# for i, j in __characterization.items():
 	# 	print('{} -> {}'.format(i, j))
+
+	# print('Road is connected -> {}'.format(nx.is_strongly_connected(road_net)))
+	# print('Gg   is connected -> {}'.format(nx.is_strongly_connected(Gg)))
+	# print('Gp   is connected -> {}'.format(nx.is_strongly_connected(Gp)))
+
+	handle_triplets(Gg, Gp, gp_mappings)
 
 	stop_graph = nx.readwrite.json_graph.adjacency_data(Gg)
 	with open('data/stop_graph_data.json', 'w') as json_file:
