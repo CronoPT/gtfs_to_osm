@@ -1,4 +1,5 @@
 import pandas as pd
+import osmnx as ox
 import json
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -99,17 +100,17 @@ def compute_distance_to_or_and_de(point, coords):
 		if prev != None:
 			line = [prev, curr]
 			if point_belongs_to_line(point, line):
-				distance_to_or += haversine_distance(prev,  point)
-				distance_to_de += haversine_distance(point, curr)
+				distance_to_or += haversine_distance(prev,  point)*1000
+				distance_to_de += haversine_distance(point, curr)*1000
 				or_geometry.append(point)
 				de_geometry.extend((point, curr))
 				point_reached = True
 			else:
 				if not point_reached:
-					distance_to_or += haversine_distance(prev, curr)
+					distance_to_or += haversine_distance(prev, curr)*1000
 					or_geometry.append(curr)	
 				else:
-					distance_to_de += haversine_distance(prev, curr)
+					distance_to_de += haversine_distance(prev, curr)*1000
 					de_geometry.append(curr)
 
 		prev = curr
@@ -154,6 +155,10 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 		key = point_info['key']  
 	)
 
+	keep_attributes = {key:value for key, value in edge_to_intersect.items() if key not in [
+		'length', 'geometry', 'origin', 'destin'
+	]}
+
 	point = point_info['point']
 	origin_point_item = net.nodes[point_info['origin_id']] 
 	destin_point_item = net.nodes[point_info['destin_id']]
@@ -187,12 +192,12 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 		distance_to_or = haversine_distance(
 			origin_point,
 			point_info['point']
-		)
+		)*1000
 
 		distance_to_de = haversine_distance(
 			point_info['point'],
 			destin_point
-		)
+		)*1000
 
 	ADD['links'].append({
 		'origin': point_info['origin_id'],
@@ -221,7 +226,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				'length': distance_to_or,
 				'origin': point_info['origin_id'],
 				'destin': node_id
-			},
+			}, **keep_attributes
 		)
 
 		net.add_edge(
@@ -231,7 +236,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				'length': distance_to_de,
 				'origin': node_id,
 				'destin': point_info['destin_id']
-			},
+			}, **keep_attributes
 		)
 	else:
 		net.add_edge(
@@ -242,7 +247,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				'origin': point_info['origin_id'],
 				'destin': node_id,
 				'geometry': or_geometry
-			},
+			}, **keep_attributes
 		)
 		net.add_edge(
 			node_id,
@@ -252,7 +257,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				'origin': node_id,
 				'destin': point_info['destin_id'],
 				'geometry': de_geometry
-			},
+			}, **keep_attributes
 		)
 
 	for observer in observers:
@@ -299,6 +304,29 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 			weight='length'
 		)
 	except nx.exception.NetworkXNoPath:
+		# print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
+		# print(road_net[0])
+		# print(road_net[1])
+
+		# first = False
+		# for node, edge in road_net[0].items():
+		# 	if 'oneway' in edge[0] and edge[0]['oneway']==True:
+		# 		first = True
+
+		# second = False
+		# for node, edge in road_net[1].items():
+		# 	if 'oneway' in edge[0] and edge[0]['oneway']==True:
+		# 		second = True
+
+		# if first:
+		# 	print('Origin node might be stuck in a one way street')
+		
+		# if second:
+		# 	print('Destiny node might be stuck in a one way street')
+
+		# _impossible_paths_assetion.append(first or second)
+
+		# print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')	
 		distance = -1
 
 	for link in ADD['links']:
@@ -318,32 +346,64 @@ def handle_triplets(Gg, Gp, gp_mappings):
 	for node in Gg.nodes():
 		in_deg  = Gg.in_degree(node)
 		out_deg = Gg.out_degree(node)
-		projections = gp_mappings[node]
+		this_mappings = gp_mappings[node]
 
-		if in_deg==1 and out_deg==1 and len(projections)>1:
+		if in_deg==1 and out_deg==1 and len(this_mappings)>1:
 			in_edge  = Gg.in_edges(node)
 			out_edge = Gg.out_edges(node)
 
 			before_node = [u for u, _ in in_edge ][0]
 			after_node  = [v for _, v in out_edge][0]
 
-			this_mappings   = gp_mappings[node]
+			# if before_node == after_node:
+			# 	continue
+
 			before_mappings = gp_mappings[before_node] 
 			after_mappings  = gp_mappings[after_node]
 
 			total_paths = len(before_mappings)*len(after_mappings)
-
+			path = []
+			path_cost = 0
 			path_counting = {p_node:0 for p_node in this_mappings} 
 			for before_map in before_mappings:
 				for after_map in after_mappings:
-					try:
-						path = nx.dijkstra_path(Gp, before_map, after_map, weight='length')
-					except nx.NetworkXNoPath:
-						total_paths -= 1
-						continue 
+
+					min_cost = np.inf
+					min_cost_path = []
+					for proj in this_mappings:
+						
+						cost = Gp.get_edge_data(before_map, proj)['length'] + \
+						       Gp.get_edge_data(proj, after_map)['length']
+
+						if cost < min_cost:
+							min_cost_path = [before_map, proj, after_map]
+							min_cost = cost	
+
+					path = min_cost_path
+					path_cost = min_cost
+					# print('Path -> {} {} - {} ({} - {}) costed - {}'.format(
+					# 	path, before_node, after_node, before_map, after_map, path_cost
+					# ))
+
 					for p_node in this_mappings:
 						if p_node in path:
 							path_counting[p_node] += 1
+
+			if len([count for _, count in path_counting.items() if count>0])==0:
+				print('Lele')
+				_as = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in before_mappings]
+				_bs = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in this_mappings]
+				_cs = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in after_mappings]
+
+				for a in _as:
+					for b in _bs:
+						print([a, b])
+
+				for c in _cs:
+					for b in _bs:
+						print([b, c]) 
+
+				continue
 
 			for p_node, count in path_counting.items():
 				if count==0:
@@ -354,6 +414,49 @@ def handle_triplets(Gg, Gp, gp_mappings):
 					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
 					break
 
+
+def is_sink(G, node):
+	out_deg = G.out_degree(node)
+	return out_deg==0
+
+
+def is_source(G, node):
+	in_deg = G.in_degree(node)
+	return in_deg==0
+
+
+def is_assigned(node, mappings):
+	return len(mappings[node])==1
+
+
+def has_more_one_in(G, node):
+	in_deg = G.in_degree(node)
+	return in_deg > 1
+
+
+def has_more_one_out(G, node):
+	out_deg = G.out_degree(node)
+	return out_deg > 1
+
+
+def is_boundary(Gg, node, mappings):
+	return is_sink(Gg, node) or           \
+	       is_source(Gg, node) or         \
+		   is_assigned(node, mappings) or \
+		   has_more_one_in(Gg, node) or   \
+		   has_more_one_out(Gg, node) 
+
+
+def handle_non_bifurcating(Gg, Gp, gp_mappings):
+	T   = nx.dfs_tree(Gg)
+	suc = nx.dfs_successors(Gg) 
+	pre = nx.dfs_predecessors(Gg)
+	dfs_edges = nx.dfs_edges(Gg)
+
+
+	for index, dfs_edge in enumerate(dfs_edges):
+		if is_boundary(Gg, dfs_edge[0], gp_mappings):
+			pass
 
 if __name__ == '__main__':
 
@@ -367,7 +470,7 @@ if __name__ == '__main__':
 	DEL = {'nodes': [], 'links': []}
 	ADD = {'nodes': [], 'links': []}
 
-	file = open('data/lisbon_net_data.json', 'r')
+	file = open('data/network.json', 'r')
 	network_json = json.load(file)
 	file.close() 
 
@@ -376,9 +479,9 @@ if __name__ == '__main__':
 	stops_df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
 	route_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
 
-	file = open('data/lisbon_net_data.json', 'r')
-	net  = json.load(file)
-	file.close() 
+	# file = open('data/network.json', 'r')
+	# net  = json.load(file)
+	# file.close() 
 
 	route_ids = []
 	stop_ids  = []
@@ -445,6 +548,8 @@ if __name__ == '__main__':
 
 	p_graph_nodes = []
 	p_graph_edges = []
+	_impossible_paths = []
+	_impossible_paths_assetion = []
 
 	gp_mappings = {}
 	counter     = 0
@@ -492,6 +597,11 @@ if __name__ == '__main__':
 					p_graph_edges.append((origin_node_id, destin_node_id, {
 						'length': length
 					}))
+				else:
+					p_graph_edges.append((origin_node_id, destin_node_id, {
+						'length': np.inf
+					}))
+					_impossible_paths.append([tuple_origin_point, tuple_destin_point])	
 
 	print_progress_bar(len(Gg.edges), len(Gg.edges), prefix='[P GRAPH BUILD] 3/3')
 				
@@ -502,16 +612,23 @@ if __name__ == '__main__':
 	# __characterization = {i:0 for i in range(21)}
 	# for stop_id, projections in gp_mappings.items():
 	# 	__characterization[len(projections)] += 1
-	# 	if len(projections) == 0:
-	# 		print('This is the one -> {}'.format(stop_id))
 	# for i, j in __characterization.items():
 	# 	print('{} -> {}'.format(i, j))
 
-	# print('Road is connected -> {}'.format(nx.is_strongly_connected(road_net)))
-	# print('Gg   is connected -> {}'.format(nx.is_strongly_connected(Gg)))
-	# print('Gp   is connected -> {}'.format(nx.is_strongly_connected(Gp)))
 
 	handle_triplets(Gg, Gp, gp_mappings)
+
+	# __characterization = {i:0 for i in range(21)}
+	# for stop_id, projections in gp_mappings.items():
+	# 	__characterization[len(projections)] += 1
+	# for i, j in __characterization.items():
+	# 	print('{} -> {}'.format(i, j))
+
+	# olea = True
+	# for bol in _impossible_paths_assetion:
+	# 	olea = olea and bol
+
+	# print('All impossible paths had nodes stuck in one way streets -> {}'.format(olea))
 
 	stop_graph = nx.readwrite.json_graph.adjacency_data(Gg)
 	with open('data/stop_graph_data.json', 'w') as json_file:
@@ -520,3 +637,15 @@ if __name__ == '__main__':
 	proj_graph = nx.readwrite.json_graph.adjacency_data(Gp)
 	with open('data/proj_graph_data.json', 'w') as json_file:
 		json.dump(proj_graph, json_file, indent=4)
+
+	json_data = {
+		'type': 'MultiLineString',
+		'coordinates': _impossible_paths
+	}
+
+	with open('data/test4.geojson', 'w') as json_file:
+		json.dump(json_data, json_file, indent=4)
+
+	# print(road_net.get_edge_data(21270959, 413210796))
+	# print(road_net.get_edge_data(413210796, 21270959))
+	# print(road_net.edges[21270959, 413210796, 0]['length'])

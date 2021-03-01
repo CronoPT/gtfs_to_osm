@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import json
 import math
+import networkx as nx
 
 def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
 	'''
@@ -283,6 +284,23 @@ def fill_structures(origin, destin, struct, or_id, de_id, key):
 			'key': key
 		})
 
+
+def dead_end_edge(road_net, segment):
+	edge_info = road_net.get_edge_data(
+		segment['origin_id'],
+		segment['destin_id'],
+		segment['key']
+	)
+
+	no_way_out = road_net.out_degree(segment['destin_id'])==0
+	no_way_in  = road_net.in_degree(segment['origin_id'])==0
+	one_way    = edge_info['oneway']==True
+
+	# print(edge_info)
+
+	return (no_way_out or no_way_in) and one_way
+
+
 if __name__ == '__main__':
 	'''
 	| The value within which we will look for projected 
@@ -298,9 +316,11 @@ if __name__ == '__main__':
 	'''
 	DIVISIONS = 100
 
-	file = open('data/lisbon_net_data.json', 'r')
+	file = open('data/network.json', 'r')
 	net  = json.load(file)
 	file.close() 
+
+	road_net = nx.readwrite.json_graph.adjacency_graph(net)
 
 	max_lat = -np.inf
 	min_lat = np.inf
@@ -426,8 +446,14 @@ if __name__ == '__main__':
 						segment['segment'][1], 
 						stp
 					)
+					# edge_info = road_net.get_edge_data(
+					# 	segment['origin_id'],
+					# 	segment['destin_id'],
+					# 	segment['key']
+					# )
+					# print('Projecting stop {} -> {}'.format(stop['stop_id'], edge_info))
 					distance = haversine_distance(stp, closest)*1000
-					if distance < THRESHOLD+added_thresh:
+					if distance < THRESHOLD+added_thresh and not dead_end_edge(road_net, segment):
 						pjs.append({
 							'point': closest,
 							'distance':  distance,

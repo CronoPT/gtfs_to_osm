@@ -7,12 +7,17 @@
 import pandas as pd
 import json
 
-df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
+# df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
+df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
 
 points = []
 
-for _, row in df.iterrows():
-	points.append([row['stop_lon'], row['stop_lat']])
+# for _, row in df.iterrows():
+# 	points.append([row['stop_lon'], row['stop_lat']])
+
+for stop in df['cod_paragem'].unique():
+	stop_row = df[ df['cod_paragem']==stop ].iloc[0]
+	points.append([stop_row['longitude'], stop_row['latitude']])
 
 json_data = {
 	'type': 'MultiPoint',
