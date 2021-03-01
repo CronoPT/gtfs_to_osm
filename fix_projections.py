@@ -407,11 +407,11 @@ def handle_triplets(Gg, Gp, gp_mappings):
 
 			for p_node, count in path_counting.items():
 				if count==0:
-					gp_mappings[node].remove(p_node)
 					Gp.remove_node(p_node)
+					gp_mappings[node].remove(p_node)
 				elif count==total_paths:
-					gp_mappings[node] = [p_node]
 					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
+					gp_mappings[node] = [p_node]
 					break
 
 
@@ -502,8 +502,10 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 		for node, countings in path_counts.items():
 			for p_node, count in countings.items():
 				if count == 0:
+					Gp.remove_node(p_node)
 					gp_mappings[node].remove(p_node)
 				elif count == total_paths:
+					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
 					gp_mappings[node] = [p_node]
 					break
 
@@ -515,6 +517,53 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 	# 	print('{} -> {}'.format(length, count)) 
 	# print(dfs_edges)
 	# print(sequences)
+
+def handle_stars(Gg, Gp, gp_mappings):
+
+	for node in Gg.nodes():
+		in_deg  = Gg.in_degree(node)
+		out_deg = Gg.out_degree(node)
+		this_mappings = gp_mappings[node]
+
+		if ((in_deg==1 and out_deg>1) or (in_deg>1 and out_deg==1)) and \
+		   len(gp_mappings[node])>1:
+
+			before_nodes = [u for u, _ in Gg.in_edges(node)]
+			after_nodes  = [v for _, v in Gg.out_edges(node)]
+
+			path_count  = {n:0 for n in this_mappings}
+			total_paths = 0
+			for before_node in before_nodes:
+				for after_node in after_nodes:
+					origin_mappings = gp_mappings[before_node]
+					destin_mappings = gp_mappings[after_node]
+
+					total_paths += len(origin_mappings)*len(destin_mappings)
+
+					
+					for or_map in origin_mappings:
+						for de_map in destin_mappings:
+							min_path = None
+							min_path_cost = np.inf
+							for this_map in this_mappings:
+								path_cost  = Gp.get_edge_data(or_map, this_map)['length']
+								path_cost += Gp.get_edge_data(this_map, de_map)['length']
+								if path_cost < min_path_cost:
+									min_path = this_map
+									min_path_cost = path_cost
+							
+
+							path_count[min_path] += 1
+
+
+			for p_node, count in path_count.items():
+				if count==0:
+					Gp.remove_node(p_node)
+					gp_mappings[node].remove(p_node)
+				elif count==total_paths: 
+					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
+					gp_mappings[node] = [p_node]
+					break
 
 if __name__ == '__main__':
 
@@ -683,6 +732,14 @@ if __name__ == '__main__':
 		print('{} -> {}'.format(i, j))
 
 	handle_non_bifurcating(Gg, Gp, gp_mappings)
+
+	__characterization = {i:0 for i in range(21)}
+	for stop_id, projections in gp_mappings.items():
+		__characterization[len(projections)] += 1
+	for i, j in __characterization.items():
+		print('{} -> {}'.format(i, j))
+
+	handle_stars(Gg, Gp, gp_mappings)
 
 	__characterization = {i:0 for i in range(21)}
 	for stop_id, projections in gp_mappings.items():
