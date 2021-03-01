@@ -445,18 +445,76 @@ def is_boundary(Gg, node, mappings):
 		   is_assigned(node, mappings) or \
 		   has_more_one_in(Gg, node) or   \
 		   has_more_one_out(Gg, node) 
-
+	
 
 def handle_non_bifurcating(Gg, Gp, gp_mappings):
-	T   = nx.dfs_tree(Gg)
-	suc = nx.dfs_successors(Gg) 
-	pre = nx.dfs_predecessors(Gg)
-	dfs_edges = nx.dfs_edges(Gg)
+	dfs_edges = list(nx.dfs_edges(Gg))
 
-
+	prev_destin = None
+	sequences   = [] 
+	curr_sequence = []
 	for index, dfs_edge in enumerate(dfs_edges):
-		if is_boundary(Gg, dfs_edge[0], gp_mappings):
-			pass
+		curr_origin = dfs_edge[0]
+		curr_destin = dfs_edge[1]
+
+		if curr_origin!=prev_destin and prev_destin!=None:
+			curr_sequence.append(prev_destin)
+			sequences.append(curr_sequence)
+			curr_sequence = []
+			
+		if is_boundary(Gg, curr_origin, gp_mappings):
+			curr_sequence.append(curr_origin)
+			sequences.append(curr_sequence)
+			curr_sequence = []
+		else:
+			curr_sequence.append(curr_origin)
+
+		prev_destin = curr_destin
+
+	sequences = [s for s in sequences if len(s)>2]
+	
+	for sequence in sequences:
+		origin = sequence[0]
+		destin = sequence[-1]
+		middle = sequence[1:-1]
+
+		origin_mappings = gp_mappings[origin]
+		destin_mappings = gp_mappings[destin]
+
+		path_counts = {n:{m:0 for m in gp_mappings[n]} for n in middle} 
+		total_paths = len(origin_mappings)*len(destin_mappings)
+		for or_map in origin_mappings:
+			for de_map in destin_mappings:
+				try:
+					path = nx.algorithms.shortest_paths.weighted.dijkstra_path(
+						Gp, 
+						source=or_map, 
+						target=de_map,
+						weight='length'
+					)
+
+					for index, p_node in enumerate(path[1:-1]):
+						path_counts[middle[index]][p_node] += 1
+				
+				except nx.exception.NetworkXNoPath:
+					total_paths -= 1
+
+		for node, countings in path_counts.items():
+			for p_node, count in countings.items():
+				if count == 0:
+					gp_mappings[node].remove(p_node)
+				elif count == total_paths:
+					gp_mappings[node] = [p_node]
+					break
+
+	# counts = {i:0 for i in range(40)}
+	# for sequence in sequences:
+	# 	counts[len(sequence)] += 1
+
+	# for length, count in counts.items():
+	# 	print('{} -> {}'.format(length, count)) 
+	# print(dfs_edges)
+	# print(sequences)
 
 if __name__ == '__main__':
 
@@ -609,20 +667,28 @@ if __name__ == '__main__':
 	Gp.add_nodes_from(p_graph_nodes)
 	Gp.add_edges_from(p_graph_edges)
 
-	# __characterization = {i:0 for i in range(21)}
-	# for stop_id, projections in gp_mappings.items():
-	# 	__characterization[len(projections)] += 1
-	# for i, j in __characterization.items():
-	# 	print('{} -> {}'.format(i, j))
+	__characterization = {i:0 for i in range(21)}
+	for stop_id, projections in gp_mappings.items():
+		__characterization[len(projections)] += 1
+	for i, j in __characterization.items():
+		print('{} -> {}'.format(i, j))
 
 
 	handle_triplets(Gg, Gp, gp_mappings)
 
-	# __characterization = {i:0 for i in range(21)}
-	# for stop_id, projections in gp_mappings.items():
-	# 	__characterization[len(projections)] += 1
-	# for i, j in __characterization.items():
-	# 	print('{} -> {}'.format(i, j))
+	__characterization = {i:0 for i in range(21)}
+	for stop_id, projections in gp_mappings.items():
+		__characterization[len(projections)] += 1
+	for i, j in __characterization.items():
+		print('{} -> {}'.format(i, j))
+
+	handle_non_bifurcating(Gg, Gp, gp_mappings)
+
+	__characterization = {i:0 for i in range(21)}
+	for stop_id, projections in gp_mappings.items():
+		__characterization[len(projections)] += 1
+	for i, j in __characterization.items():
+		print('{} -> {}'.format(i, j))
 
 	# olea = True
 	# for bol in _impossible_paths_assetion:
