@@ -343,6 +343,8 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 
 def handle_triplets(Gg, Gp, gp_mappings):
 	
+	global _removed_one
+
 	for node in Gg.nodes():
 		in_deg  = Gg.in_degree(node)
 		out_deg = Gg.out_degree(node)
@@ -409,9 +411,11 @@ def handle_triplets(Gg, Gp, gp_mappings):
 				if count==0:
 					Gp.remove_node(p_node)
 					gp_mappings[node].remove(p_node)
+					_removed_one = True
 				elif count==total_paths:
 					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
 					gp_mappings[node] = [p_node]
+					_removed_one = True
 					break
 
 
@@ -448,6 +452,9 @@ def is_boundary(Gg, node, mappings):
 	
 
 def handle_non_bifurcating(Gg, Gp, gp_mappings):
+	
+	global _removed_one
+
 	dfs_edges = list(nx.dfs_edges(Gg))
 
 	prev_destin = None
@@ -504,9 +511,11 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 				if count == 0:
 					Gp.remove_node(p_node)
 					gp_mappings[node].remove(p_node)
+					_removed_one = True
 				elif count == total_paths:
 					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
 					gp_mappings[node] = [p_node]
+					_removed_one = True
 					break
 
 	# counts = {i:0 for i in range(40)}
@@ -518,7 +527,62 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 	# print(dfs_edges)
 	# print(sequences)
 
+
+def is_component_boundary(Gg, node, gp_mappings):
+	return is_sink(Gg, node) or   \
+	       is_source(Gg, node) or \
+		   is_assigned(node, gp_mappings)
+
+
+def decompose(Gg, Gp, gp_mappings):
+	components = []
+	queue = []
+	queue_reserve  = []
+	used_bounds    = []
+	explored_nodes = []
+	initial_node  = None
+	for node in Gg.nodes:
+		if is_source(Gg, node) or \
+		   is_assigned(node, gp_mappings):
+			initial_node = node
+	
+	queue.append(initial_node)
+	components_left = True
+	while components_left:
+		curr_component  = nx.DiGraph()
+		components_left = False
+		while len(queue)>0:
+			node  = queue.pop(0)
+			edges = Gg.out_edges(node)
+			[curr_component.add_edge(*edge) for edge in edges]
+			new_nodes = [v for _, v in edges]
+			for new_node in new_nodes:
+				if is_component_boundary(Gg, new_node, gp_mappings) and \
+				   new_node not in used_bounds:
+					queue_reserve.append(new_node)
+					used_bounds.append(new_node)
+				elif new_node not in explored_nodes:
+					queue.append(new_node)
+					explored_nodes.append(new_node)
+		queue = queue_reserve
+		queue_reserve = []
+		components_left = len(queue)>0
+		components.append(curr_component)
+
+	return components
+
+
+def mark_cycle_breakers(G):
+	g = nx.Graph()
+	g.add_edges_from(G.edges)
+	cycles = nx.cycle_basis(g)
+	
+	for cycle in cycles:
+		print(len(cycle))
+
 def handle_stars(Gg, Gp, gp_mappings):
+	
+	global _removed_one
 
 	for node in Gg.nodes():
 		in_deg  = Gg.in_degree(node)
@@ -560,10 +624,27 @@ def handle_stars(Gg, Gp, gp_mappings):
 				if count==0:
 					Gp.remove_node(p_node)
 					gp_mappings[node].remove(p_node)
+					_removed_one = True
 				elif count==total_paths: 
 					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
 					gp_mappings[node] = [p_node]
+					_removed_one = True
 					break
+
+
+def assign_projections(C, Gg, Gp, gp_mappings):
+	print('New Component Here')
+	paths = 1
+	assigned_nodes = 0
+	for node in C.nodes:
+		paths *= len(gp_mappings[node])
+		if len(gp_mappings[node]) == 1:
+			assigned_nodes += 1
+	print('Combinations in this component -> {}'.format(paths))
+	print('Component has {} nodes, {} of which are assigned and {} of which are not'.format(
+		C.number_of_nodes(), assigned_nodes, C.number_of_nodes() - assigned_nodes
+	))
+
 
 if __name__ == '__main__':
 
@@ -722,30 +803,50 @@ if __name__ == '__main__':
 	for i, j in __characterization.items():
 		print('{} -> {}'.format(i, j))
 
+	_removed_one = True
+	cycles = 0
+	while _removed_one:
+		_removed_one = False
 
-	handle_triplets(Gg, Gp, gp_mappings)
+		handle_triplets(Gg, Gp, gp_mappings)
 
+		# __characterization = {i:0 for i in range(21)}
+		# for stop_id, projections in gp_mappings.items():
+		# 	__characterization[len(projections)] += 1
+		# for i, j in __characterization.items():
+		# 	print('{} -> {}'.format(i, j))
+
+		handle_non_bifurcating(Gg, Gp, gp_mappings)
+
+		# __characterization = {i:0 for i in range(21)}
+		# for stop_id, projections in gp_mappings.items():
+		# 	__characterization[len(projections)] += 1
+		# for i, j in __characterization.items():
+		# 	print('{} -> {}'.format(i, j))
+
+		handle_stars(Gg, Gp, gp_mappings)
+		cycles += 1
+
+	print('Finished after {} cycles'.format(cycles))
 	__characterization = {i:0 for i in range(21)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
 	for i, j in __characterization.items():
 		print('{} -> {}'.format(i, j))
 
-	handle_non_bifurcating(Gg, Gp, gp_mappings)
+	components = decompose(Gg, Gp, gp_mappings)
+	
+	# print(components)
+	# print(len(components))
+	# for component in components:
+	# 	print('This componenets has {} nodes and {} edges'.format(
+	# 		component.number_of_nodes(), component.number_of_edges()
+	# 	))
 
-	__characterization = {i:0 for i in range(21)}
-	for stop_id, projections in gp_mappings.items():
-		__characterization[len(projections)] += 1
-	for i, j in __characterization.items():
-		print('{} -> {}'.format(i, j))
+	for component in components:
+		assign_projections(component, Gg, Gp, gp_mappings)
 
-	handle_stars(Gg, Gp, gp_mappings)
-
-	__characterization = {i:0 for i in range(21)}
-	for stop_id, projections in gp_mappings.items():
-		__characterization[len(projections)] += 1
-	for i, j in __characterization.items():
-		print('{} -> {}'.format(i, j))
+	mark_cycle_breakers(Gg)
 
 	# olea = True
 	# for bol in _impossible_paths_assetion:
