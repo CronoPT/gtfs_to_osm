@@ -443,12 +443,17 @@ def has_more_one_out(G, node):
 	return out_deg > 1
 
 
+def is_cycle_breaker(G, node):
+	return 'breaker' in G.nodes[node]
+
+
 def is_boundary(Gg, node, mappings):
 	return is_sink(Gg, node) or           \
 	       is_source(Gg, node) or         \
 		   is_assigned(node, mappings) or \
 		   has_more_one_in(Gg, node) or   \
-		   has_more_one_out(Gg, node) 
+		   has_more_one_out(Gg, node) or  \
+		   is_cycle_breaker(Gg, node)	   
 	
 
 def handle_non_bifurcating(Gg, Gp, gp_mappings):
@@ -529,9 +534,10 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 
 
 def is_component_boundary(Gg, node, gp_mappings):
-	return is_sink(Gg, node) or   \
-	       is_source(Gg, node) or \
-		   is_assigned(node, gp_mappings)
+	return is_sink(Gg, node) or          \
+	       is_source(Gg, node) or        \
+		   is_cycle_breaker(Gg, node) or \
+		   is_assigned(node, gp_mappings) 
 
 
 def decompose(Gg, Gp, gp_mappings):
@@ -572,13 +578,33 @@ def decompose(Gg, Gp, gp_mappings):
 	return components
 
 
+def mark_as_cycle_breaker(G, node):
+	G.nodes[node]['breaker'] = True
+
+def mark_cycle_breakers_rec(G, node, path, explored):
+	out_edges = G.out_edges(node)
+	new_nodes = [v for _, v in out_edges]
+
+	for new_node in new_nodes:
+		if new_node in path:
+			mark_as_cycle_breaker(G, new_node)
+			return
+
+		if new_node in explored:
+			return
+		else:
+			explored.append(new_node)
+			mark_cycle_breakers_rec(
+				G, new_node, path + [new_node], explored
+			)
+
 def mark_cycle_breakers(G):
-	g = nx.Graph()
-	g.add_edges_from(G.edges)
-	cycles = nx.cycle_basis(g)
+
+	global stop_ids
+
+	initial_node = stop_ids[1]
+	mark_cycle_breakers_rec(G, initial_node, [], [initial_node], 44)
 	
-	for cycle in cycles:
-		print(len(cycle))
 
 def handle_stars(Gg, Gp, gp_mappings):
 	
@@ -797,6 +823,8 @@ if __name__ == '__main__':
 	Gp.add_nodes_from(p_graph_nodes)
 	Gp.add_edges_from(p_graph_edges)
 
+	mark_cycle_breakers(Gg)
+
 	__characterization = {i:0 for i in range(21)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
@@ -844,9 +872,8 @@ if __name__ == '__main__':
 	# 	))
 
 	for component in components:
+		print(nx.is_directed_acyclic_graph(component))
 		assign_projections(component, Gg, Gp, gp_mappings)
-
-	mark_cycle_breakers(Gg)
 
 	# olea = True
 	# for bol in _impossible_paths_assetion:
