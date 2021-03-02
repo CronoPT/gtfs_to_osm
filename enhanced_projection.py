@@ -475,10 +475,12 @@ if __name__ == '__main__':
 				filtered_pjs.append(pj)
 				points_in_filtered.append(pj['point'])
 
+		filtered_pjs.sort(key=lambda item: item['distance'])
+
 		stop_mappings.append({
 			'stop_id':  stop['stop_id'],
 			'point':    stp,
-			'mappings': filtered_pjs
+			'mappings': filtered_pjs[:3]
 		})
 
 	print_progress_bar(len(stops), len(stops), prefix='[PROJECT] 2/2')

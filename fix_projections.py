@@ -391,21 +391,21 @@ def handle_triplets(Gg, Gp, gp_mappings):
 						if p_node in path:
 							path_counting[p_node] += 1
 
-			if len([count for _, count in path_counting.items() if count>0])==0:
-				print('Lele')
-				_as = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in before_mappings]
-				_bs = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in this_mappings]
-				_cs = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in after_mappings]
+			# if len([count for _, count in path_counting.items() if count>0])==0:
+			# 	print('Lele')
+			# 	_as = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in before_mappings]
+			# 	_bs = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in this_mappings]
+			# 	_cs = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in after_mappings]
 
-				for a in _as:
-					for b in _bs:
-						print([a, b])
+			# 	for a in _as:
+			# 		for b in _bs:
+			# 			print([a, b])
 
-				for c in _cs:
-					for b in _bs:
-						print([b, c]) 
+			# 	for c in _cs:
+			# 		for b in _bs:
+			# 			print([b, c]) 
 
-				continue
+			# 	continue
 
 			for p_node, count in path_counting.items():
 				if count==0:
@@ -575,11 +575,18 @@ def decompose(Gg, Gp, gp_mappings):
 		components_left = len(queue)>0
 		components.append(curr_component)
 
-	return components
+	broken_components = []
+	for component in components:
+		wccs = list(nx.weakly_connected_components(component))
+		broken_components.extend([Gg.subgraph(wcc) for wcc in wccs])
+		# broken_components.extend(wccs)
+
+	return broken_components
 
 
 def mark_as_cycle_breaker(G, node):
 	G.nodes[node]['breaker'] = True
+
 
 def mark_cycle_breakers_rec(G, node, path, explored):
 	out_edges = G.out_edges(node)
@@ -602,9 +609,9 @@ def mark_cycle_breakers(G):
 
 	global stop_ids
 
-	initial_node = stop_ids[1]
-	mark_cycle_breakers_rec(G, initial_node, [], [initial_node], 44)
-	
+	initial_node = stop_ids[0]
+	mark_cycle_breakers_rec(G, initial_node, [], [initial_node])
+
 
 def handle_stars(Gg, Gp, gp_mappings):
 	
@@ -660,6 +667,7 @@ def handle_stars(Gg, Gp, gp_mappings):
 
 def assign_projections(C, Gg, Gp, gp_mappings):
 	print('New Component Here')
+	print('wCC -> {}'.format(nx.number_weakly_connected_components(C)))
 	paths = 1
 	assigned_nodes = 0
 	for node in C.nodes:
