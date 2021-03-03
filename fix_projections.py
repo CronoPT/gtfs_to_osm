@@ -543,47 +543,46 @@ def is_component_boundary(Gg, node, gp_mappings):
 
 def decompose(Gg, Gp, gp_mappings):
 	components = []
-	queue = []
-	queue_reserve  = []
-	used_bounds    = []
-	explored_nodes = []
-	initial_node   = None
-	for node in Gg.nodes:
-		if is_source(Gg, node) or \
-		   is_assigned(node, gp_mappings):
-			initial_node = node
 	
-	queue.append(initial_node)
-	components_left = True
-	while components_left:
-		curr_component  = nx.DiGraph()
-		components_left = False
-		while len(queue)>0:
-			node  = queue.pop(0)
-			edges = Gg.out_edges(node)
+	sources = [node for node in Gg.nodes if is_source(Gg, node)]
+	
+	for source in sources:
+		queue = []
+		queue_reserve  = []
+		used_bounds    = []
+		explored_nodes = []
 
-			for edge in edges:
-				origin = edge[0]
-				destin = edge[1]
-				if (not is_component_boundary(Gg, origin, gp_mappings)) or \
-				   (not is_component_boundary(Gg, destin, gp_mappings)):
+		queue.append(source)
+		components_left = True
+		while components_left:
+			curr_component  = nx.DiGraph()
+			components_left = False
+			while len(queue)>0:
+				node  = queue.pop(0)
+				edges = Gg.out_edges(node)
 
-					curr_component.add_edge(*edge)
+				for edge in edges:
+					origin = edge[0]
+					destin = edge[1]
+					if not (is_component_boundary(Gg, origin, gp_mappings) and \
+							is_component_boundary(Gg, destin, gp_mappings)):
 
-			new_nodes = [v for _, v in edges]
-			for new_node in new_nodes:
-				if is_component_boundary(Gg, new_node, gp_mappings) and \
-				   new_node not in used_bounds:
-					queue_reserve.append(new_node)
-					used_bounds.append(new_node)
-				elif new_node not in explored_nodes:
-					queue.append(new_node)
-					explored_nodes.append(new_node)
+						curr_component.add_edge(*edge) #further breaks components into more wCCs
 
-		queue = queue_reserve
-		queue_reserve = []
-		components_left = len(queue)>0
-		components.append(curr_component)
+				new_nodes = [v for _, v in edges]
+				for new_node in new_nodes:
+					if is_component_boundary(Gg, new_node, gp_mappings) and \
+					new_node not in used_bounds:
+						queue_reserve.append(new_node)
+						used_bounds.append(new_node)
+					elif new_node not in explored_nodes:
+						queue.append(new_node)
+						explored_nodes.append(new_node)
+
+			queue = queue_reserve
+			queue_reserve = []
+			components_left = len(queue)>0
+			components.append(curr_component)
 
 	broken_components = []
 	for component in components:
@@ -737,6 +736,42 @@ def assign_projections(C, Gg, Gp, gp_mappings):
 	for node in C.nodes:
 		p_node = gp_mappings[node][best_assign[lengths[node]['index']]]
 		gp_mappings[node] = [p_node]
+
+
+def fix_remaining(Gg, Gp, gp_mappings):
+
+	for node in Gg.nodes:
+		if len(gp_mappings[node])>1:
+			in_edges  = Gg.in_edges(node)
+			out_edges = Gg.out_edges(node)
+
+			best_cost = np.inf
+			best_opt  = []
+			for p_option in gp_mappings[node]: 
+				this_cost = 0
+
+				for in_edge in in_edges:
+					origin = in_edge[0]
+					info = Gp.get_edge_data(
+						gp_mappings[origin][0],
+						p_option
+					)
+					this_cost += info['length']
+
+				for out_edge in out_edges:
+					destin = out_edge[1]
+					info = Gp.get_edge_data(
+						p_option,
+						gp_mappings[destin][0]
+					)
+					this_cost += info['length']
+
+				if this_cost < best_cost:
+					best_cost = this_cost
+					best_opt  = p_option
+			
+			gp_mappings[node] = [p_option]
+
 
 if __name__ == '__main__':
 
@@ -968,32 +1003,77 @@ if __name__ == '__main__':
 		# plt.show()
 		# plt.clf()
 	
-	_total_combinations = 0
-	_combinations_tried = 0
-	for component in components:
-		combinations_here = 1
-		for node in component.nodes:
-			combinations_here *= len(gp_mappings[node])
-		# if combinations_here == 16777216:
-		# 	[print(n, m) for n, m in gp_mappings.items() if n in component.nodes]
-		# print('A component with {} combinations'.format(combinations_here))
-		_total_combinations += combinations_here
+	# _total_combinations = 0
+	# _combinations_tried = 0
+	# for component in components:
+	# 	combinations_here = 1
+	# 	for node in component.nodes:
+	# 		combinations_here *= len(gp_mappings[node])
+	# 	if combinations_here == 16777216:
+	# 		[print(n, m) for n, m in gp_mappings.items() if n in component.nodes]
+	# 	print('A component with {} combinations'.format(combinations_here))
+	# 	_total_combinations += combinations_here
 
-	print_progress_bar(
-		0, _total_combinations, prefix='[ASSIGNMENT] 4/4', suffix='{}/{}'.format(
-			_combinations_tried, _total_combinations
-		)
-	)
+	# print_progress_bar(
+	# 	0, _total_combinations, prefix='[ASSIGNMENT] 4/4', suffix='{}/{}'.format(
+	# 		_combinations_tried, _total_combinations
+	# 	)
+	# )
 	for index, component in enumerate(components):
 		print_progress_bar(index, len(components), prefix='[ASSIGNMENT] 4/4')
 		assign_projections(component, Gg, Gp, gp_mappings)
 	print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
 
-	__characterization = {i:0 for i in range(21)}
+	__characterization = {i:0 for i in range(4)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
 	for i, j in __characterization.items():
 		print('{} -> {}'.format(i, j))
+
+	print('Fixing Remaining')
+
+	fix_remaining(Gg, Gp, gp_mappings)
+
+	__characterization = {i:0 for i in range(4)}
+	for stop_id, projections in gp_mappings.items():
+		__characterization[len(projections)] += 1
+	for i, j in __characterization.items():
+		print('{} -> {}'.format(i, j))
+
+	# for node, mappings in gp_mappings.items():
+	# 	if len(mappings) > 1:
+	# 		print(is_source(Gg, node))
+
+	# tot_sources = 0
+	# for node in Gg.nodes:
+	# 	if is_source(Gg, node):
+	# 		tot_sources += 1
+
+	# print('There are a total of {} sources'.format(tot_sources))
+
+	# for node in Gg.nodes:
+	# 	if len(gp_mappings[node])>1:
+	# 		print(is_sink(Gg, node))
+	# nx.draw_networkx(Gg, with_labels=False, 
+	# 	node_color = ['red' if len(gp_mappings[node])>1 else 'blue' for node in Gg.nodes],
+	#     pos={node: (Gg.nodes[node]['lon'], Gg.nodes[node]['lat']) for node in Gg.nodes},
+	# 	node_size=10
+	# )
+	
+	# plt.show()
+
+	# print(len(components))
+
+	# for index, component in enumerate(components):
+	# 	print_progress_bar(index, len(components), prefix='[ASSIGNMENT] 4/4')
+	# 	assign_projections(component, Gg, Gp, gp_mappings)
+	# print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
+
+	# __characterization = {i:0 for i in range(4)}
+	# for stop_id, projections in gp_mappings.items():
+	# 	__characterization[len(projections)] += 1
+	# for i, j in __characterization.items():
+		# print('{} -> {}'.format(i, j))
 
 	# olea = True
 	# for bol in _impossible_paths_assetion:
