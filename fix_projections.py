@@ -547,7 +547,7 @@ def decompose(Gg, Gp, gp_mappings):
 	queue_reserve  = []
 	used_bounds    = []
 	explored_nodes = []
-	initial_node  = None
+	initial_node   = None
 	for node in Gg.nodes:
 		if is_source(Gg, node) or \
 		   is_assigned(node, gp_mappings):
@@ -561,7 +561,15 @@ def decompose(Gg, Gp, gp_mappings):
 		while len(queue)>0:
 			node  = queue.pop(0)
 			edges = Gg.out_edges(node)
-			[curr_component.add_edge(*edge) for edge in edges]
+
+			for edge in edges:
+				origin = edge[0]
+				destin = edge[1]
+				if (not is_component_boundary(Gg, origin, gp_mappings)) or \
+				   (not is_component_boundary(Gg, destin, gp_mappings)):
+
+					curr_component.add_edge(*edge)
+
 			new_nodes = [v for _, v in edges]
 			for new_node in new_nodes:
 				if is_component_boundary(Gg, new_node, gp_mappings) and \
@@ -571,6 +579,7 @@ def decompose(Gg, Gp, gp_mappings):
 				elif new_node not in explored_nodes:
 					queue.append(new_node)
 					explored_nodes.append(new_node)
+
 		queue = queue_reserve
 		queue_reserve = []
 		components_left = len(queue)>0
@@ -582,6 +591,10 @@ def decompose(Gg, Gp, gp_mappings):
 		broken_components.extend([Gg.subgraph(wcc) for wcc in wccs])
 
 	return broken_components
+
+
+# def decompose(Gg, Gp, gp_mappings):
+# 	pass
 
 
 def mark_as_cycle_breaker(G, node):
@@ -675,8 +688,16 @@ def assign_projections(C, Gg, Gp, gp_mappings):
 		possible_assigns *= len(gp_mappings[node])
 
 	if possible_assigns==1: #everything already assigned
+		# _combinations_tried += 1
+		# print_progress_bar(
+		# 	_combinations_tried, 
+		# 	_total_combinations, 
+		# 	prefix='[ASSIGNMENT] 4/4', 
+		# 	suffix='{}/{}'.format(
+		# 		_combinations_tried, _total_combinations
+		# 	)
+		# )
 		return
-
 
 	lengths = {} 
 	for index, node in enumerate(C.nodes):
@@ -703,15 +724,15 @@ def assign_projections(C, Gg, Gp, gp_mappings):
 			best_cost   = this_cost
 			best_assign = assign
 
-		_combinations_tried += 1
-		print_progress_bar(
-			_combinations_tried, 
-			_total_combinations, 
-			prefix='[ASSIGNMENT] 4/4', 
-			suffix='{}/{}'.format(
-				_combinations_tried, _total_combinations
-			)
-		)
+		# _combinations_tried += 1
+		# print_progress_bar(
+		# 	_combinations_tried, 
+		# 	_total_combinations, 
+		# 	prefix='[ASSIGNMENT] 4/4', 
+		# 	suffix='{}/{}'.format(
+		# 		_combinations_tried, _total_combinations
+		# 	)
+		# )
 
 	for node in C.nodes:
 		p_node = gp_mappings[node][best_assign[lengths[node]['index']]]
@@ -754,7 +775,8 @@ if __name__ == '__main__':
 
 	nodes = {}
 	graph_edges = []
-
+	_purged = []
+	_g_purg = nx.DiGraph()
 	for index, shape in enumerate(route_df['shape_id'].unique()):
 		print_progress_bar(index, len(route_df['shape_id'].unique()), prefix='[GRAPH BUILD]   2/4')
 
@@ -781,7 +803,20 @@ if __name__ == '__main__':
 
 			if prev != None:
 				graph_edges.append((prev['stop_id'], curr['stop_id']))
-
+			
+				if prev['stop_id'] not in _purged and curr['stop_id'] not in _purged:
+						try:
+							distance = nx.algorithms.shortest_paths.weighted.dijkstra_path_length(
+								_g_purg, 
+								source=curr['stop_id'], 
+								target=prev['stop_id'],
+							)
+							nodes[stop_id]['breaker'] = True
+							_purged.append(curr['stop_id'])
+						except nx.exception.NetworkXNoPath:
+							_g_purg.add_edge(prev['stop_id'], curr['stop_id'])
+						except nx.exception.NodeNotFound:
+							_g_purg.add_edge(prev['stop_id'], curr['stop_id'])
 			prev = curr
 	
 	print_progress_bar(
@@ -792,14 +827,24 @@ if __name__ == '__main__':
 
 	graph_nodes = []
 	for _, obj in nodes.items():
-		graph_nodes.append((obj['stop_id'], {
-			'lon': obj['lon'],
-			'lat': obj['lat'],
-		}))
+		if 'breaker' in obj:
+			graph_nodes.append((obj['stop_id'], {
+				'lon': obj['lon'],
+				'lat': obj['lat'],
+				'breaker': True
+			}))
+		else:
+			graph_nodes.append((obj['stop_id'], {
+				'lon': obj['lon'],
+				'lat': obj['lat'],
+			}))
 
 	Gg = nx.DiGraph()
 	Gg.add_nodes_from(graph_nodes)
 	Gg.add_edges_from(graph_edges)
+
+	# for node in Gg.nodes:
+	# 	print(Gg.nodes[node])
 
 	file = open('data/stop_mappings.json', 'r')
 	mappings = json.load(file)
@@ -868,7 +913,7 @@ if __name__ == '__main__':
 	Gp.add_nodes_from(p_graph_nodes)
 	Gp.add_edges_from(p_graph_edges)
 
-	mark_cycle_breakers(Gg)
+	# mark_cycle_breakers(Gg)
 
 	__characterization = {i:0 for i in range(4)}
 	for stop_id, projections in gp_mappings.items():
@@ -909,12 +954,19 @@ if __name__ == '__main__':
 
 	components = decompose(Gg, Gp, gp_mappings)
 	
-	# print(components)
-	# print(len(components))
-	# for component in components:
-	# 	print('This componenets has {} nodes and {} edges'.format(
-	# 		component.number_of_nodes(), component.number_of_edges()
-	# 	))
+	for component in components:
+		c = 1
+		for node in component.nodes:
+			c *= len(gp_mappings[node])
+		print('This componenets has {} nodes and {} edges\t   ->   {} combinations'.format(
+			component.number_of_nodes(), component.number_of_edges(),c
+		))
+
+		# nx.draw_networkx(component, with_labels=False, 
+		# 	node_color = ['red' if is_component_boundary(Gg, node, gp_mappings) else 'blue' for node in component.nodes]
+		# )
+		# plt.show()
+		# plt.clf()
 	
 	_total_combinations = 0
 	_combinations_tried = 0
@@ -933,9 +985,15 @@ if __name__ == '__main__':
 		)
 	)
 	for index, component in enumerate(components):
-		# print_progress_bar(index, len(components), prefix='[ASSIGNMENT] 4/4')
+		print_progress_bar(index, len(components), prefix='[ASSIGNMENT] 4/4')
 		assign_projections(component, Gg, Gp, gp_mappings)
-	# print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
+	print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
+
+	__characterization = {i:0 for i in range(21)}
+	for stop_id, projections in gp_mappings.items():
+		__characterization[len(projections)] += 1
+	for i, j in __characterization.items():
+		print('{} -> {}'.format(i, j))
 
 	# olea = True
 	# for bol in _impossible_paths_assetion:
