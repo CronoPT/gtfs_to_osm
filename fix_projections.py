@@ -3,6 +3,7 @@ import osmnx as ox
 import json
 import networkx as nx
 import matplotlib.pyplot as plt
+import itertools
 import numpy as np
 import math
 import copy
@@ -579,7 +580,6 @@ def decompose(Gg, Gp, gp_mappings):
 	for component in components:
 		wccs = list(nx.weakly_connected_components(component))
 		broken_components.extend([Gg.subgraph(wcc) for wcc in wccs])
-		# broken_components.extend(wccs)
 
 	return broken_components
 
@@ -666,19 +666,56 @@ def handle_stars(Gg, Gp, gp_mappings):
 
 
 def assign_projections(C, Gg, Gp, gp_mappings):
-	print('New Component Here')
-	print('wCC -> {}'.format(nx.number_weakly_connected_components(C)))
-	paths = 1
-	assigned_nodes = 0
-	for node in C.nodes:
-		paths *= len(gp_mappings[node])
-		if len(gp_mappings[node]) == 1:
-			assigned_nodes += 1
-	print('Combinations in this component -> {}'.format(paths))
-	print('Component has {} nodes, {} of which are assigned and {} of which are not'.format(
-		C.number_of_nodes(), assigned_nodes, C.number_of_nodes() - assigned_nodes
-	))
 
+	global _total_combinations
+	global _combinations_tried
+
+	possible_assigns = 1
+	for node in C.nodes:
+		possible_assigns *= len(gp_mappings[node])
+
+	if possible_assigns==1: #everything already assigned
+		return
+
+
+	lengths = {} 
+	for index, node in enumerate(C.nodes):
+		lengths[node] = {
+			'index': index,
+			'candidates': gp_mappings[node]
+		}
+
+	best_assign = None
+	best_cost   = np.inf
+	assign_options = itertools.product(*[range(len(item['candidates'])) for _, item in lengths.items()])
+	for assign in assign_options:
+		this_cost = 0
+		for edge in C.edges:
+			origin = edge[0]
+			destin = edge[1]
+
+			p_origin = gp_mappings[origin][assign[lengths[origin]['index']]]
+			p_destin = gp_mappings[destin][assign[lengths[destin]['index']]]
+
+			this_cost += Gp.get_edge_data(p_origin, p_destin)['length']
+
+		if this_cost < best_cost:
+			best_cost   = this_cost
+			best_assign = assign
+
+		_combinations_tried += 1
+		print_progress_bar(
+			_combinations_tried, 
+			_total_combinations, 
+			prefix='[ASSIGNMENT] 4/4', 
+			suffix='{}/{}'.format(
+				_combinations_tried, _total_combinations
+			)
+		)
+
+	for node in C.nodes:
+		p_node = gp_mappings[node][best_assign[lengths[node]['index']]]
+		gp_mappings[node] = [p_node]
 
 if __name__ == '__main__':
 
@@ -708,10 +745,10 @@ if __name__ == '__main__':
 	route_ids = []
 	stop_ids  = []
 	for index, row in route_df.iterrows():
-		print_progress_bar(index, route_df.shape[0], prefix='[STOP CHECK]    1/3')
+		print_progress_bar(index, route_df.shape[0], prefix='[STOP CHECK]    1/4')
 		route_ids.append('{}{}{}'.format(row['carreira'], row['sentido'], row['variante']))
 		stop_ids.append(int(row['cod_paragem']))
-	print_progress_bar(route_df.shape[0], route_df.shape[0], prefix='[STOP CHECK]    1/3')
+	print_progress_bar(route_df.shape[0], route_df.shape[0], prefix='[STOP CHECK]    1/4')
 	route_df['shape_id'] = route_ids 
 	route_df['stop_id']  = stop_ids
 
@@ -719,7 +756,7 @@ if __name__ == '__main__':
 	graph_edges = []
 
 	for index, shape in enumerate(route_df['shape_id'].unique()):
-		print_progress_bar(index, len(route_df['shape_id'].unique()), prefix='[GRAPH BUILD]   2/3')
+		print_progress_bar(index, len(route_df['shape_id'].unique()), prefix='[GRAPH BUILD]   2/4')
 
 		sequence = route_df[ route_df['shape_id']==shape ]
 		sequence.sort_values('n_ordem')
@@ -750,7 +787,7 @@ if __name__ == '__main__':
 	print_progress_bar(
 		len(route_df['shape_id'].unique()), 
 		len(route_df['shape_id'].unique()), 
-		prefix='[GRAPH BUILD]   2/3'
+		prefix='[GRAPH BUILD]   2/4'
 	)
 
 	graph_nodes = []
@@ -790,7 +827,7 @@ if __name__ == '__main__':
 	node_lon = nx.get_node_attributes(Gg, 'lon')
 	node_lat = nx.get_node_attributes(Gg, 'lat')
 	for index, edge in enumerate(Gg.edges):
-		print_progress_bar(index, len(Gg.edges), prefix='[P GRAPH BUILD] 3/3')
+		print_progress_bar(index, len(Gg.edges), prefix='[P GRAPH BUILD] 3/4')
 
 		origin_stop_id = edge[0]
 		destin_stop_id = edge[1]
@@ -825,7 +862,7 @@ if __name__ == '__main__':
 					}))
 					_impossible_paths.append([tuple_origin_point, tuple_destin_point])	
 
-	print_progress_bar(len(Gg.edges), len(Gg.edges), prefix='[P GRAPH BUILD] 3/3')
+	print_progress_bar(len(Gg.edges), len(Gg.edges), prefix='[P GRAPH BUILD] 3/4')
 				
 	Gp = nx.DiGraph()
 	Gp.add_nodes_from(p_graph_nodes)
@@ -833,7 +870,7 @@ if __name__ == '__main__':
 
 	mark_cycle_breakers(Gg)
 
-	__characterization = {i:0 for i in range(21)}
+	__characterization = {i:0 for i in range(4)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
 	for i, j in __characterization.items():
@@ -864,7 +901,7 @@ if __name__ == '__main__':
 		cycles += 1
 
 	print('Finished after {} cycles'.format(cycles))
-	__characterization = {i:0 for i in range(21)}
+	__characterization = {i:0 for i in range(4)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
 	for i, j in __characterization.items():
@@ -878,10 +915,27 @@ if __name__ == '__main__':
 	# 	print('This componenets has {} nodes and {} edges'.format(
 	# 		component.number_of_nodes(), component.number_of_edges()
 	# 	))
-
+	
+	_total_combinations = 0
+	_combinations_tried = 0
 	for component in components:
-		print(nx.is_directed_acyclic_graph(component))
+		combinations_here = 1
+		for node in component.nodes:
+			combinations_here *= len(gp_mappings[node])
+		# if combinations_here == 16777216:
+		# 	[print(n, m) for n, m in gp_mappings.items() if n in component.nodes]
+		# print('A component with {} combinations'.format(combinations_here))
+		_total_combinations += combinations_here
+
+	print_progress_bar(
+		0, _total_combinations, prefix='[ASSIGNMENT] 4/4', suffix='{}/{}'.format(
+			_combinations_tried, _total_combinations
+		)
+	)
+	for index, component in enumerate(components):
+		# print_progress_bar(index, len(components), prefix='[ASSIGNMENT] 4/4')
 		assign_projections(component, Gg, Gp, gp_mappings)
+	# print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
 
 	# olea = True
 	# for bol in _impossible_paths_assetion:

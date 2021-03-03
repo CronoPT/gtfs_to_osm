@@ -2,9 +2,9 @@ import subprocess
 
 if __name__ == '__main__':
 	scripts = [
-		'osm_network_to_json.py', 
-		'osm_manual_tweaks.py',
-		'network_to_geojson.py',
+		# 'osm_network_to_json.py', 
+		# 'osm_manual_tweaks.py',
+		# 'network_to_geojson.py',
 		'enhanced_projection.py',
 		'fix_projections.py'
 	]

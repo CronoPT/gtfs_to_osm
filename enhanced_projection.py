@@ -480,7 +480,7 @@ if __name__ == '__main__':
 		stop_mappings.append({
 			'stop_id':  stop['stop_id'],
 			'point':    stp,
-			'mappings': filtered_pjs[:3]
+			'mappings': filtered_pjs[:2]
 		})
 
 	print_progress_bar(len(stops), len(stops), prefix='[PROJECT] 2/2')
