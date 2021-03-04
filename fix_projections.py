@@ -952,7 +952,7 @@ if __name__ == '__main__':
 
 	# mark_cycle_breakers(Gg)
 
-	__characterization = {i:0 for i in range(4)}
+	__characterization = {i:0 for i in range(21)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
 	for i, j in __characterization.items():
@@ -983,7 +983,7 @@ if __name__ == '__main__':
 		cycles += 1
 
 	print('Finished after {} cycles'.format(cycles))
-	__characterization = {i:0 for i in range(4)}
+	__characterization = {i:0 for i in range(21)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
 	for i, j in __characterization.items():
@@ -1026,7 +1026,7 @@ if __name__ == '__main__':
 		assign_projections(component, Gg, Gp, gp_mappings)
 	print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
 
-	__characterization = {i:0 for i in range(4)}
+	__characterization = {i:0 for i in range(21)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
 	for i, j in __characterization.items():
@@ -1036,7 +1036,7 @@ if __name__ == '__main__':
 
 	fix_remaining(Gg, Gp, gp_mappings)
 
-	__characterization = {i:0 for i in range(4)}
+	__characterization = {i:0 for i in range(21)}
 	for stop_id, projections in gp_mappings.items():
 		__characterization[len(projections)] += 1
 	for i, j in __characterization.items():
@@ -1047,7 +1047,7 @@ if __name__ == '__main__':
 
 		stop_item = list(filter(lambda item: item['stop_id']==stop, mappings))[0]
 		point = [Gp.nodes[mapping[0]]['lon'], Gp.nodes[mapping[0]]['lat']]
-		print(point)
+		# print(point)
 		proj_item = list(filter(lambda item: item['point']==point, stop_item['mappings']))[0]
 
 		final_mappings.append({

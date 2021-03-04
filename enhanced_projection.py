@@ -475,12 +475,31 @@ if __name__ == '__main__':
 				filtered_pjs.append(pj)
 				points_in_filtered.append(pj['point'])
 
-		filtered_pjs.sort(key=lambda item: item['distance'])
+		segments_projections = {}
+		for pj in filtered_pjs:
+			key = (pj['origin_id'], pj['destin_id'], pj['key'])
+
+			if key not in segments_projections:
+				segments_projections[key] = []
+
+			segments_projections[key].append(pj)
+
+		final_pjs = []
+		for key, pjs in segments_projections.items():
+			best_distance = np.inf
+			best_proj = None
+			for pj in pjs:
+				if pj['distance']<best_distance:
+					best_proj = pj
+					best_distance = pj['distance']
+			final_pjs.append(best_proj)
+
+		#filtered_pjs.sort(key=lambda item: item['distance'])
 
 		stop_mappings.append({
 			'stop_id':  stop['stop_id'],
 			'point':    stp,
-			'mappings': filtered_pjs[:2]
+			'mappings': final_pjs#filtered_pjs[:2]
 		})
 
 	print_progress_bar(len(stops), len(stops), prefix='[PROJECT] 2/2')
