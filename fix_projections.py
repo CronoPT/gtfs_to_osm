@@ -592,10 +592,6 @@ def decompose(Gg, Gp, gp_mappings):
 	return broken_components
 
 
-# def decompose(Gg, Gp, gp_mappings):
-# 	pass
-
-
 def mark_as_cycle_breaker(G, node):
 	G.nodes[node]['breaker'] = True
 
@@ -812,11 +808,18 @@ if __name__ == '__main__':
 	graph_edges = []
 	_purged = []
 	_g_purg = nx.DiGraph()
+	route_paths = []
 	for index, shape in enumerate(route_df['shape_id'].unique()):
 		print_progress_bar(index, len(route_df['shape_id'].unique()), prefix='[GRAPH BUILD]   2/4')
 
 		sequence = route_df[ route_df['shape_id']==shape ]
 		sequence.sort_values('n_ordem')
+
+		route_path = {
+			'route_id': shape,
+			'stops': []
+		}
+		route_paths.append(route_path)
 
 		prev = None
 		for _, row in sequence.iterrows():
@@ -825,6 +828,8 @@ if __name__ == '__main__':
 			stop_id = row['stop_id']
 			coords  = (lon, lat)
 			curr    = None 
+
+			route_path['stops'].append(stop_id)
 
 			if stop_id not in nodes:
 				curr = {
@@ -877,9 +882,6 @@ if __name__ == '__main__':
 	Gg = nx.DiGraph()
 	Gg.add_nodes_from(graph_nodes)
 	Gg.add_edges_from(graph_edges)
-
-	# for node in Gg.nodes:
-	# 	print(Gg.nodes[node])
 
 	file = open('data/stop_mappings.json', 'r')
 	mappings = json.load(file)
@@ -1040,6 +1042,25 @@ if __name__ == '__main__':
 	for i, j in __characterization.items():
 		print('{} -> {}'.format(i, j))
 
+	final_mappings = []
+	for stop, mapping in gp_mappings.items():
+
+		stop_item = list(filter(lambda item: item['stop_id']==stop, mappings))[0]
+		point = [Gp.nodes[mapping[0]]['lon'], Gp.nodes[mapping[0]]['lat']]
+		print(point)
+		proj_item = list(filter(lambda item: item['point']==point, stop_item['mappings']))[0]
+
+		final_mappings.append({
+			'stop_id': stop,
+			'point': [
+				Gp.nodes[mapping[0]]['lon'],
+				Gp.nodes[mapping[0]]['lat']
+			],
+			'origin_id': proj_item['origin_id'],
+			'destin_id': proj_item['destin_id'],
+			'key': proj_item['key']
+		})
+
 	# for node, mappings in gp_mappings.items():
 	# 	if len(mappings) > 1:
 	# 		print(is_source(Gg, node))
@@ -1080,6 +1101,12 @@ if __name__ == '__main__':
 	# 	olea = olea and bol
 
 	# print('All impossible paths had nodes stuck in one way streets -> {}'.format(olea))
+
+	with open('data/fixed_stops.json', 'w') as json_file:
+		json.dump(final_mappings, json_file, indent=4)
+
+	with open('data/route_paths.json', 'w') as json_file:
+		json.dump(route_paths, json_file, indent=4)
 
 	stop_graph = nx.readwrite.json_graph.adjacency_data(Gg)
 	with open('data/stop_graph_data.json', 'w') as json_file:
