@@ -305,29 +305,6 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 			weight='length'
 		)
 	except nx.exception.NetworkXNoPath:
-		# print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>')
-		# print(road_net[0])
-		# print(road_net[1])
-
-		# first = False
-		# for node, edge in road_net[0].items():
-		# 	if 'oneway' in edge[0] and edge[0]['oneway']==True:
-		# 		first = True
-
-		# second = False
-		# for node, edge in road_net[1].items():
-		# 	if 'oneway' in edge[0] and edge[0]['oneway']==True:
-		# 		second = True
-
-		# if first:
-		# 	print('Origin node might be stuck in a one way street')
-		
-		# if second:
-		# 	print('Destiny node might be stuck in a one way street')
-
-		# _impossible_paths_assetion.append(first or second)
-
-		# print('<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<')	
 		distance = -1
 
 	for link in ADD['links']:
@@ -358,9 +335,6 @@ def handle_triplets(Gg, Gp, gp_mappings):
 			before_node = [u for u, _ in in_edge ][0]
 			after_node  = [v for _, v in out_edge][0]
 
-			# if before_node == after_node:
-			# 	continue
-
 			before_mappings = gp_mappings[before_node] 
 			after_mappings  = gp_mappings[after_node]
 
@@ -384,29 +358,10 @@ def handle_triplets(Gg, Gp, gp_mappings):
 
 					path = min_cost_path
 					path_cost = min_cost
-					# print('Path -> {} {} - {} ({} - {}) costed - {}'.format(
-					# 	path, before_node, after_node, before_map, after_map, path_cost
-					# ))
 
 					for p_node in this_mappings:
 						if p_node in path:
 							path_counting[p_node] += 1
-
-			# if len([count for _, count in path_counting.items() if count>0])==0:
-			# 	print('Lele')
-			# 	_as = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in before_mappings]
-			# 	_bs = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in this_mappings]
-			# 	_cs = [[Gp.nodes[node]['lon'], Gp.nodes[node]['lat']] for node in after_mappings]
-
-			# 	for a in _as:
-			# 		for b in _bs:
-			# 			print([a, b])
-
-			# 	for c in _cs:
-			# 		for b in _bs:
-			# 			print([b, c]) 
-
-			# 	continue
 
 			for p_node, count in path_counting.items():
 				if count==0:
@@ -524,15 +479,6 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 					_removed_one = True
 					break
 
-	# counts = {i:0 for i in range(40)}
-	# for sequence in sequences:
-	# 	counts[len(sequence)] += 1
-
-	# for length, count in counts.items():
-	# 	print('{} -> {}'.format(length, count)) 
-	# print(dfs_edges)
-	# print(sequences)
-
 
 def is_component_boundary(Gg, node, gp_mappings):
 	return is_sink(Gg, node) or          \
@@ -594,31 +540,6 @@ def decompose(Gg, Gp, gp_mappings):
 
 def mark_as_cycle_breaker(G, node):
 	G.nodes[node]['breaker'] = True
-
-
-def mark_cycle_breakers_rec(G, node, path, explored):
-	out_edges = G.out_edges(node)
-	new_nodes = [v for _, v in out_edges]
-
-	for new_node in new_nodes:
-		if new_node in path:
-			mark_as_cycle_breaker(G, new_node)
-			return
-
-		if new_node in explored:
-			return
-		else:
-			explored.append(new_node)
-			mark_cycle_breakers_rec(
-				G, new_node, path + [new_node], explored
-			)
-
-def mark_cycle_breakers(G):
-
-	global stop_ids
-
-	initial_node = stop_ids[0]
-	mark_cycle_breakers_rec(G, initial_node, [], [initial_node])
 
 
 def handle_stars(Gg, Gp, gp_mappings):
@@ -950,14 +871,6 @@ if __name__ == '__main__':
 	Gp.add_nodes_from(p_graph_nodes)
 	Gp.add_edges_from(p_graph_edges)
 
-	# mark_cycle_breakers(Gg)
-
-	__characterization = {i:0 for i in range(21)}
-	for stop_id, projections in gp_mappings.items():
-		__characterization[len(projections)] += 1
-	for i, j in __characterization.items():
-		print('{} -> {}'.format(i, j))
-
 	_removed_one = True
 	cycles = 0
 	while _removed_one:
@@ -965,89 +878,25 @@ if __name__ == '__main__':
 
 		handle_triplets(Gg, Gp, gp_mappings)
 
-		# __characterization = {i:0 for i in range(21)}
-		# for stop_id, projections in gp_mappings.items():
-		# 	__characterization[len(projections)] += 1
-		# for i, j in __characterization.items():
-		# 	print('{} -> {}'.format(i, j))
-
 		handle_non_bifurcating(Gg, Gp, gp_mappings)
-
-		# __characterization = {i:0 for i in range(21)}
-		# for stop_id, projections in gp_mappings.items():
-		# 	__characterization[len(projections)] += 1
-		# for i, j in __characterization.items():
-		# 	print('{} -> {}'.format(i, j))
 
 		handle_stars(Gg, Gp, gp_mappings)
 		cycles += 1
 
-	print('Finished after {} cycles'.format(cycles))
-	__characterization = {i:0 for i in range(21)}
-	for stop_id, projections in gp_mappings.items():
-		__characterization[len(projections)] += 1
-	for i, j in __characterization.items():
-		print('{} -> {}'.format(i, j))
-
 	components = decompose(Gg, Gp, gp_mappings)
-	
-	for component in components:
-		c = 1
-		for node in component.nodes:
-			c *= len(gp_mappings[node])
-		print('This componenets has {} nodes and {} edges\t   ->   {} combinations'.format(
-			component.number_of_nodes(), component.number_of_edges(),c
-		))
 
-		# nx.draw_networkx(component, with_labels=False, 
-		# 	node_color = ['red' if is_component_boundary(Gg, node, gp_mappings) else 'blue' for node in component.nodes]
-		# )
-		# plt.show()
-		# plt.clf()
-	
-	# _total_combinations = 0
-	# _combinations_tried = 0
-	# for component in components:
-	# 	combinations_here = 1
-	# 	for node in component.nodes:
-	# 		combinations_here *= len(gp_mappings[node])
-	# 	if combinations_here == 16777216:
-	# 		[print(n, m) for n, m in gp_mappings.items() if n in component.nodes]
-	# 	print('A component with {} combinations'.format(combinations_here))
-	# 	_total_combinations += combinations_here
-
-	# print_progress_bar(
-	# 	0, _total_combinations, prefix='[ASSIGNMENT] 4/4', suffix='{}/{}'.format(
-	# 		_combinations_tried, _total_combinations
-	# 	)
-	# )
 	for index, component in enumerate(components):
 		print_progress_bar(index, len(components), prefix='[ASSIGNMENT] 4/4')
 		assign_projections(component, Gg, Gp, gp_mappings)
 	print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
 
-	__characterization = {i:0 for i in range(21)}
-	for stop_id, projections in gp_mappings.items():
-		__characterization[len(projections)] += 1
-	for i, j in __characterization.items():
-		print('{} -> {}'.format(i, j))
-
-	print('Fixing Remaining')
-
 	fix_remaining(Gg, Gp, gp_mappings)
-
-	__characterization = {i:0 for i in range(21)}
-	for stop_id, projections in gp_mappings.items():
-		__characterization[len(projections)] += 1
-	for i, j in __characterization.items():
-		print('{} -> {}'.format(i, j))
 
 	final_mappings = []
 	for stop, mapping in gp_mappings.items():
 
 		stop_item = list(filter(lambda item: item['stop_id']==stop, mappings))[0]
 		point = [Gp.nodes[mapping[0]]['lon'], Gp.nodes[mapping[0]]['lat']]
-		# print(point)
 		proj_item = list(filter(lambda item: item['point']==point, stop_item['mappings']))[0]
 
 		final_mappings.append({
@@ -1060,47 +909,6 @@ if __name__ == '__main__':
 			'destin_id': proj_item['destin_id'],
 			'key': proj_item['key']
 		})
-
-	# for node, mappings in gp_mappings.items():
-	# 	if len(mappings) > 1:
-	# 		print(is_source(Gg, node))
-
-	# tot_sources = 0
-	# for node in Gg.nodes:
-	# 	if is_source(Gg, node):
-	# 		tot_sources += 1
-
-	# print('There are a total of {} sources'.format(tot_sources))
-
-	# for node in Gg.nodes:
-	# 	if len(gp_mappings[node])>1:
-	# 		print(is_sink(Gg, node))
-	# nx.draw_networkx(Gg, with_labels=False, 
-	# 	node_color = ['red' if len(gp_mappings[node])>1 else 'blue' for node in Gg.nodes],
-	#     pos={node: (Gg.nodes[node]['lon'], Gg.nodes[node]['lat']) for node in Gg.nodes},
-	# 	node_size=10
-	# )
-	
-	# plt.show()
-
-	# print(len(components))
-
-	# for index, component in enumerate(components):
-	# 	print_progress_bar(index, len(components), prefix='[ASSIGNMENT] 4/4')
-	# 	assign_projections(component, Gg, Gp, gp_mappings)
-	# print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
-
-	# __characterization = {i:0 for i in range(4)}
-	# for stop_id, projections in gp_mappings.items():
-	# 	__characterization[len(projections)] += 1
-	# for i, j in __characterization.items():
-		# print('{} -> {}'.format(i, j))
-
-	# olea = True
-	# for bol in _impossible_paths_assetion:
-	# 	olea = olea and bol
-
-	# print('All impossible paths had nodes stuck in one way streets -> {}'.format(olea))
 
 	with open('data/fixed_stops.json', 'w') as json_file:
 		json.dump(final_mappings, json_file, indent=4)
@@ -1123,7 +931,3 @@ if __name__ == '__main__':
 
 	with open('data/test4.geojson', 'w') as json_file:
 		json.dump(json_data, json_file, indent=4)
-
-	# print(road_net.get_edge_data(21270959, 413210796))
-	# print(road_net.get_edge_data(413210796, 21270959))
-	# print(road_net.edges[21270959, 413210796, 0]['length'])

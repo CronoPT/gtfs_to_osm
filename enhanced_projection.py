@@ -296,8 +296,6 @@ def dead_end_edge(road_net, segment):
 	no_way_in  = road_net.in_degree(segment['origin_id'])==0
 	one_way    = edge_info['oneway']==True
 
-	# print(edge_info)
-
 	return (no_way_out or no_way_in) and one_way
 
 
@@ -446,12 +444,6 @@ if __name__ == '__main__':
 						segment['segment'][1], 
 						stp
 					)
-					# edge_info = road_net.get_edge_data(
-					# 	segment['origin_id'],
-					# 	segment['destin_id'],
-					# 	segment['key']
-					# )
-					# print('Projecting stop {} -> {}'.format(stop['stop_id'], edge_info))
 					distance = haversine_distance(stp, closest)*1000
 					if distance < THRESHOLD+added_thresh and not dead_end_edge(road_net, segment):
 						pjs.append({
@@ -494,12 +486,10 @@ if __name__ == '__main__':
 					best_distance = pj['distance']
 			final_pjs.append(best_proj)
 
-		#filtered_pjs.sort(key=lambda item: item['distance'])
-
 		stop_mappings.append({
 			'stop_id':  stop['stop_id'],
 			'point':    stp,
-			'mappings': final_pjs#filtered_pjs[:2]
+			'mappings': final_pjs
 		})
 
 	print_progress_bar(len(stops), len(stops), prefix='[PROJECT] 2/2')

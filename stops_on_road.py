@@ -242,7 +242,6 @@ if __name__ == '__main__':
 	file.close() 
 	road_net = nx.readwrite.json_graph.adjacency_graph(network_json)
 
-	# node_max = max(road_net.nodes)
 	for i in range(len(stop_points)):
 		node_id = stop_points[i]['stop_id']
 		insert_point_as_node(road_net, node_id, stop_points[i], observers=stop_points[i+1:])
@@ -285,22 +284,22 @@ if __name__ == '__main__':
 								best_edge = edge_data 
 
 						
-						if index>1:
-							if 'geometry' in best_edge:
-								path_in_coordinates.extend(best_edge['geometry'][1:])
-							else:
-								path_in_coordinates.append([
-									road_net.nodes[destin_node]['x'], 
-									road_net.nodes[destin_node]['y']
-								])
+						# if index>1:
+						# 	if 'geometry' in best_edge:
+						# 		path_in_coordinates.extend(best_edge['geometry'][1:])
+						# 	else:
+						# 		path_in_coordinates.append([
+						# 			road_net.nodes[destin_node]['x'], 
+						# 			road_net.nodes[destin_node]['y']
+						# 		])
+						# else:
+						if 'geometry' in best_edge:
+							path_in_coordinates.extend(best_edge['geometry'])
 						else:
-							if 'geometry' in best_edge:
-								path_in_coordinates.extend(best_edge['geometry'])
-							else:
-								path_in_coordinates.append([
-									[road_net.nodes[origin_node]['x'], road_net.nodes[origin_node]['y']],
-									[road_net.nodes[destin_node]['x'], road_net.nodes[destin_node]['y']]
-								])
+							path_in_coordinates.extend([
+								[road_net.nodes[origin_node]['x'], road_net.nodes[origin_node]['y']],
+								[road_net.nodes[destin_node]['x'], road_net.nodes[destin_node]['y']]
+							])
 					origin_node = destin_node
 
 				if index==0:
