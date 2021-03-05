@@ -7,14 +7,13 @@
 
 import osmnx as ox
 import networkx as nx
-import json
+import utils.json_utils
+import configs
 
 
 if __name__ == '__main__':
 	
-	file = open('data/network.json', 'r')
-	json_data = json.load(file)
-	file.close()
+	json_data = utils.json_utils.read_json_object(configs.TWEAKED_NETWORK)
 
 	nodes_list = []
 	links_list = []
@@ -43,18 +42,12 @@ if __name__ == '__main__':
 				destiny = [destiny_item['x'], destiny_item['y']]
 				links_list.append([origin, destiny])
 
-	nodes = {
-		'type': 'MultiPoint',
-		'coordinates': nodes_list
-	}
+	utils.json_utils.write_geojson_points(
+		configs.NETWORK_NODES,
+		nodes_list
+	)
 
-	links = {
-		'type': 'MultiLineString',
-		'coordinates': links_list
-	}
-
-	with open('data/lisbon_net_nodes.geojson', 'w') as json_file:
-		json.dump(nodes, json_file, indent=4)
-
-	with open('data/lisbon_net_links.geojson', 'w') as json_file:
-		json.dump(links, json_file, indent=4)
+	utils.json_utils.write_geojson_lines(
+		configs.NETWORK_LINKS,
+		links_list
+	)

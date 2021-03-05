@@ -1,53 +1,15 @@
-import json
+'''
+| This script will take the chosen projection of each GTFS
+| stop and make them a part of the road network.
+'''
+
+
 import networkx as nx
 import math
 import numpy as np
-
-def haversine_distance(a, b):
-	'''
-	| This function computes the haversine distance
-	| between point a and point b. The distance is
-	| in kilometers.
-	'''
-
-	lat1 = a[1]
-	lat2 = b[1]
-	lon1 = a[0]
-	lon2 = b[0]
-	lat1, lat2, lon1, lon2 = map(math.radians, [lat1, lat2, lon1, lon2])
-
-	d_lat = lat2 - lat1
-	d_lon = lon2 - lon1
-
-	temp = (
-		  math.sin(d_lat/2) ** 2
-		+ math.cos(lat1)
-		* math.cos(lat2)
-		* math.sin(d_lon/2) ** 2
-	)
-
-	return 6373.0 * (2 * math.atan2(math.sqrt(temp), math.sqrt(1 - temp)))
-
-
-def point_belongs_to_line(point, line):
-	'''
-	| Return true if 'point' belongs to the 'line' and 
-	| false otherwise.
-	| As we are working with floating point numbers, a
-	| small tolerance is allowed.
-	'''
-	tolerance = 0.00000001
-
-	point  = np.array(point)
-	line_point_1 = np.array(line[0])
-	line_point_2 = np.array(line[1])
-	
-	distance_to_1 = np.linalg.norm(point-line_point_1)
-	distance_to_2 = np.linalg.norm(point-line_point_2)
-	length = np.linalg.norm(line_point_1-line_point_2)
-
-	return abs(distance_to_1+distance_to_2 - length) < tolerance
-
+import utils.geometric_utils
+import utils.json_utils
+import configs
 
 
 def compute_distance_to_or_and_de(point, coords):
@@ -74,18 +36,18 @@ def compute_distance_to_or_and_de(point, coords):
 		curr = coord
 		if prev != None:
 			line = [prev, curr]
-			if point_belongs_to_line(point, line):
-				distance_to_or += haversine_distance(prev,  point)*1000
-				distance_to_de += haversine_distance(point, curr)*1000
+			if utils.geometric_utils.point_belongs_to_line(point, line):
+				distance_to_or += utils.geometric_utils.haversine_distance(prev,  point)
+				distance_to_de += utils.geometric_utils.haversine_distance(point, curr)
 				or_geometry.append(point)
 				de_geometry.extend((point, curr))
 				point_reached = True
 			else:
 				if not point_reached:
-					distance_to_or += haversine_distance(prev, curr)*1000
+					distance_to_or += utils.geometric_utils.haversine_distance(prev, curr)
 					or_geometry.append(curr)	
 				else:
-					distance_to_de += haversine_distance(prev, curr)*1000
+					distance_to_de += utils.geometric_utils.haversine_distance(prev, curr)
 					de_geometry.append(curr)
 
 		prev = curr
@@ -154,18 +116,18 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 	else:
 		line = [origin_point, destin_point]
 
-		if not point_belongs_to_line(point, line):
+		if not utils.geometric_utils.point_belongs_to_line(point, line):
 			raise Exception('You gave me something wrong')
 
-		distance_to_or = haversine_distance(
+		distance_to_or = utils.geometric_utils.haversine_distance(
 			origin_point,
 			point_info['point']
-		)*1000
+		)
 
-		distance_to_de = haversine_distance(
+		distance_to_de = utils.geometric_utils.haversine_distance(
 			point_info['point'],
 			destin_point
-		)*1000
+		)
 
 	if or_geometry==None and de_geometry==None:
 		
@@ -232,23 +194,14 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 
 
 if __name__ == '__main__':
-
-	file = open('data/fixed_stops.json', 'r')
-	stop_points = json.load(file)
-	file.close() 
-
-	file = open('data/network.json', 'r')
-	network_json = json.load(file)
-	file.close() 
-	road_net = nx.readwrite.json_graph.adjacency_graph(network_json)
+ 
+	stop_points = utils.json_utils.read_json_object(configs.FINAL_MAPPINGS)
+	route_paths = utils.json_utils.read_json_object(configs.ROUTES_STOP_SEQUENCE)
+	road_net = utils.json_utils.read_network_json(configs.TWEAKED_NETWORK)
 
 	for i in range(len(stop_points)):
 		node_id = stop_points[i]['stop_id']
 		insert_point_as_node(road_net, node_id, stop_points[i], observers=stop_points[i+1:])
-
-	file = open('data/route_paths.json', 'r')
-	route_paths = json.load(file)
-	file.close()
 
 	for stop_item in stop_points:
 		stop_id = stop_item['stop_id']
@@ -283,16 +236,6 @@ if __name__ == '__main__':
 								best_cost = length
 								best_edge = edge_data 
 
-						
-						# if index>1:
-						# 	if 'geometry' in best_edge:
-						# 		path_in_coordinates.extend(best_edge['geometry'][1:])
-						# 	else:
-						# 		path_in_coordinates.append([
-						# 			road_net.nodes[destin_node]['x'], 
-						# 			road_net.nodes[destin_node]['y']
-						# 		])
-						# else:
 						if 'geometry' in best_edge:
 							path_in_coordinates.extend(best_edge['geometry'])
 						else:
@@ -311,20 +254,11 @@ if __name__ == '__main__':
 		
 		routes.append(route)
 
-	stops_geo_points = {
-		'type': 'MultiPoint',
-		'coordinates': [
-			item['point'] for item in stop_points
-		]
-	}
-
-	route_geometries = {	
-		'type': 'MultiLineString',
-		'coordinates': routes
-	}
-
-	with open('data/routes.geojson', 'w') as json_file:
-		json.dump(route_geometries, json_file, indent=4)
-
-	with open('data/stops.geojson', 'w') as json_file:
-		json.dump(stops_geo_points, json_file, indent=4)
+	utils.json_utils.write_geojson_lines(
+		configs.ROUTE_SHAPES, 
+		routes
+	)
+	utils.json_utils.write_geojson_points(
+		configs.STOP_LOCATIONS,
+		[item['point'] for item in stop_points]
+	)

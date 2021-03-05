@@ -1,79 +1,22 @@
+'''
+| This script implements the algorithm in Vuurstaek et al.
+| It takes the candidate projections for each GTFS stop
+| and choses the best one for each stop.
+'''
+
+
 import pandas as pd
 import osmnx as ox
-import json
 import networkx as nx
 import matplotlib.pyplot as plt
 import itertools
 import numpy as np
 import math
 import copy
-
-def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
-	'''
-	| Call in a loop to create terminal progress bar
-	| @params:
-	|    iteration   - Required  : current iteration (Int)
-	|    total       - Required  : total iterations (Int)
-	|    prefix      - Optional  : prefix string (Str)
-	|    suffix      - Optional  : suffix string (Str)
-	|    decimals    - Optional  : positive number of decimals in percent complete (Int)
-	|    length      - Optional  : character length of bar (Int)
-	|    fill        - Optional  : bar fill character (Str)
-	|    printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-	'''
-
-	percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-	filledLength = int(length * iteration // total)
-	bar = fill * filledLength + '-' * (length - filledLength)
-	print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
-	if iteration == total: 
-		print()
-
-
-def haversine_distance(a, b):
-	'''
-	| This function computes the haversine distance
-	| between point a and point b. The distance is
-	| in kilometers.
-	'''
-
-	lat1 = a[1]
-	lat2 = b[1]
-	lon1 = a[0]
-	lon2 = b[0]
-	lat1, lat2, lon1, lon2 = map(math.radians, [lat1, lat2, lon1, lon2])
-
-	d_lat = lat2 - lat1
-	d_lon = lon2 - lon1
-
-	temp = (
-		  math.sin(d_lat/2) ** 2
-		+ math.cos(lat1)
-		* math.cos(lat2)
-		* math.sin(d_lon/2) ** 2
-	)
-
-	return 6373.0 * (2 * math.atan2(math.sqrt(temp), math.sqrt(1 - temp)))
-
-
-def point_belongs_to_line(point, line):
-	'''
-	| Return true if 'point' belongs to the 'line' and 
-	| false otherwise.
-	| As we are working with floating point numbers, a
-	| small tolerance is allowed.
-	'''
-	tolerance = 0.00000001
-
-	point  = np.array(point)
-	line_point_1 = np.array(line[0])
-	line_point_2 = np.array(line[1])
-	
-	distance_to_1 = np.linalg.norm(point-line_point_1)
-	distance_to_2 = np.linalg.norm(point-line_point_2)
-	length = np.linalg.norm(line_point_1-line_point_2)
-
-	return abs(distance_to_1+distance_to_2 - length) < tolerance
+import utils.general_utils
+import utils.geometric_utils
+import utils.json_utils
+import configs
 
 
 def compute_distance_to_or_and_de(point, coords):
@@ -100,18 +43,18 @@ def compute_distance_to_or_and_de(point, coords):
 		curr = coord
 		if prev != None:
 			line = [prev, curr]
-			if point_belongs_to_line(point, line):
-				distance_to_or += haversine_distance(prev,  point)*1000
-				distance_to_de += haversine_distance(point, curr)*1000
+			if utils.geometric_utils.point_belongs_to_line(point, line):
+				distance_to_or += utils.geometric_utils.haversine_distance(prev,  point)
+				distance_to_de += utils.geometric_utils.haversine_distance(point, curr)
 				or_geometry.append(point)
 				de_geometry.extend((point, curr))
 				point_reached = True
 			else:
 				if not point_reached:
-					distance_to_or += haversine_distance(prev, curr)*1000
+					distance_to_or += utils.geometric_utils.haversine_distance(prev, curr)
 					or_geometry.append(curr)	
 				else:
-					distance_to_de += haversine_distance(prev, curr)*1000
+					distance_to_de += utils.geometric_utils.haversine_distance(prev, curr)
 					de_geometry.append(curr)
 
 		prev = curr
@@ -187,18 +130,18 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 	else:
 		line = [origin_point, destin_point]
 
-		if not point_belongs_to_line(point, line):
+		if not utils.geometric_utils.point_belongs_to_line(point, line):
 			raise Exception('You gave me something wrong')
 
-		distance_to_or = haversine_distance(
+		distance_to_or = utils.geometric_utils.haversine_distance(
 			origin_point,
 			point_info['point']
-		)*1000
+		)
 
-		distance_to_de = haversine_distance(
+		distance_to_de = utils.geometric_utils.haversine_distance(
 			point_info['point'],
 			destin_point
-		)*1000
+		)
 
 	ADD['links'].append({
 		'origin': point_info['origin_id'],
@@ -604,15 +547,6 @@ def assign_projections(C, Gg, Gp, gp_mappings):
 		possible_assigns *= len(gp_mappings[node])
 
 	if possible_assigns==1: #everything already assigned
-		# _combinations_tried += 1
-		# print_progress_bar(
-		# 	_combinations_tried, 
-		# 	_total_combinations, 
-		# 	prefix='[ASSIGNMENT] 4/4', 
-		# 	suffix='{}/{}'.format(
-		# 		_combinations_tried, _total_combinations
-		# 	)
-		# )
 		return
 
 	lengths = {} 
@@ -639,16 +573,6 @@ def assign_projections(C, Gg, Gp, gp_mappings):
 		if this_cost < best_cost:
 			best_cost   = this_cost
 			best_assign = assign
-
-		# _combinations_tried += 1
-		# print_progress_bar(
-		# 	_combinations_tried, 
-		# 	_total_combinations, 
-		# 	prefix='[ASSIGNMENT] 4/4', 
-		# 	suffix='{}/{}'.format(
-		# 		_combinations_tried, _total_combinations
-		# 	)
-		# )
 
 	for node in C.nodes:
 		p_node = gp_mappings[node][best_assign[lengths[node]['index']]]
@@ -687,7 +611,7 @@ def fix_remaining(Gg, Gp, gp_mappings):
 					best_cost = this_cost
 					best_opt  = p_option
 			
-			gp_mappings[node] = [p_option]
+			gp_mappings[node] = [best_opt]
 
 
 if __name__ == '__main__':
@@ -702,26 +626,26 @@ if __name__ == '__main__':
 	DEL = {'nodes': [], 'links': []}
 	ADD = {'nodes': [], 'links': []}
 
-	file = open('data/network.json', 'r')
-	network_json = json.load(file)
-	file.close() 
-
-	road_net = nx.readwrite.json_graph.adjacency_graph(network_json)
+	road_net = utils.json_utils.read_network_json(configs.TWEAKED_NETWORK)
 
 	stops_df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
 	route_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
 
-	# file = open('data/network.json', 'r')
-	# net  = json.load(file)
-	# file.close() 
-
 	route_ids = []
 	stop_ids  = []
 	for index, row in route_df.iterrows():
-		print_progress_bar(index, route_df.shape[0], prefix='[STOP CHECK]    1/4')
+		utils.general_utils.print_progress_bar(
+			index, 
+			route_df.shape[0], 
+			prefix='[STOP CHECK]    1/4'
+		)
 		route_ids.append('{}{}{}'.format(row['carreira'], row['sentido'], row['variante']))
 		stop_ids.append(int(row['cod_paragem']))
-	print_progress_bar(route_df.shape[0], route_df.shape[0], prefix='[STOP CHECK]    1/4')
+	utils.general_utils.print_progress_bar(
+		route_df.shape[0], 
+		route_df.shape[0], 
+		prefix='[STOP CHECK]    1/4'
+	)
 	route_df['shape_id'] = route_ids 
 	route_df['stop_id']  = stop_ids
 
@@ -731,7 +655,11 @@ if __name__ == '__main__':
 	_g_purg = nx.DiGraph()
 	route_paths = []
 	for index, shape in enumerate(route_df['shape_id'].unique()):
-		print_progress_bar(index, len(route_df['shape_id'].unique()), prefix='[GRAPH BUILD]   2/4')
+		utils.general_utils.print_progress_bar(
+			index, 
+			len(route_df['shape_id'].unique()), 
+			prefix='[GRAPH BUILD]   2/4'
+		)
 
 		sequence = route_df[ route_df['shape_id']==shape ]
 		sequence.sort_values('n_ordem')
@@ -780,7 +708,7 @@ if __name__ == '__main__':
 							_g_purg.add_edge(prev['stop_id'], curr['stop_id'])
 			prev = curr
 	
-	print_progress_bar(
+	utils.general_utils.print_progress_bar(
 		len(route_df['shape_id'].unique()), 
 		len(route_df['shape_id'].unique()), 
 		prefix='[GRAPH BUILD]   2/4'
@@ -804,9 +732,7 @@ if __name__ == '__main__':
 	Gg.add_nodes_from(graph_nodes)
 	Gg.add_edges_from(graph_edges)
 
-	file = open('data/stop_mappings.json', 'r')
-	mappings = json.load(file)
-	file.close() 
+	mappings = utils.json_utils.read_json_object(configs.CANDIDATE_MAPPINGS)
 
 	p_graph_nodes = []
 	p_graph_edges = []
@@ -830,7 +756,11 @@ if __name__ == '__main__':
 	node_lon = nx.get_node_attributes(Gg, 'lon')
 	node_lat = nx.get_node_attributes(Gg, 'lat')
 	for index, edge in enumerate(Gg.edges):
-		print_progress_bar(index, len(Gg.edges), prefix='[P GRAPH BUILD] 3/4')
+		utils.general_utils.print_progress_bar(
+			index, 
+			len(Gg.edges), 
+			prefix='[P GRAPH BUILD] 3/4'
+		)
 
 		origin_stop_id = edge[0]
 		destin_stop_id = edge[1]
@@ -865,7 +795,11 @@ if __name__ == '__main__':
 					}))
 					_impossible_paths.append([tuple_origin_point, tuple_destin_point])	
 
-	print_progress_bar(len(Gg.edges), len(Gg.edges), prefix='[P GRAPH BUILD] 3/4')
+	utils.general_utils.print_progress_bar(
+		len(Gg.edges), 
+		len(Gg.edges), 
+		prefix='[P GRAPH BUILD] 3/4'
+	)
 				
 	Gp = nx.DiGraph()
 	Gp.add_nodes_from(p_graph_nodes)
@@ -886,9 +820,17 @@ if __name__ == '__main__':
 	components = decompose(Gg, Gp, gp_mappings)
 
 	for index, component in enumerate(components):
-		print_progress_bar(index, len(components), prefix='[ASSIGNMENT] 4/4')
+		utils.general_utils.print_progress_bar(
+			index, 
+			len(components), 
+			prefix='[ASSIGNMENT]    4/4'
+		)
 		assign_projections(component, Gg, Gp, gp_mappings)
-	print_progress_bar(len(components), len(components), prefix='[ASSIGNMENT] 4/4')
+	utils.general_utils.print_progress_bar(
+		len(components), 
+		len(components), 
+		prefix='[ASSIGNMENT]    4/4'
+	)
 
 	fix_remaining(Gg, Gp, gp_mappings)
 
@@ -910,24 +852,5 @@ if __name__ == '__main__':
 			'key': proj_item['key']
 		})
 
-	with open('data/fixed_stops.json', 'w') as json_file:
-		json.dump(final_mappings, json_file, indent=4)
-
-	with open('data/route_paths.json', 'w') as json_file:
-		json.dump(route_paths, json_file, indent=4)
-
-	stop_graph = nx.readwrite.json_graph.adjacency_data(Gg)
-	with open('data/stop_graph_data.json', 'w') as json_file:
-		json.dump(stop_graph, json_file, indent=4)
-	
-	proj_graph = nx.readwrite.json_graph.adjacency_data(Gp)
-	with open('data/proj_graph_data.json', 'w') as json_file:
-		json.dump(proj_graph, json_file, indent=4)
-
-	json_data = {
-		'type': 'MultiLineString',
-		'coordinates': _impossible_paths
-	}
-
-	with open('data/test4.geojson', 'w') as json_file:
-		json.dump(json_data, json_file, indent=4)
+	utils.json_utils.write_json_object(configs.FINAL_MAPPINGS, final_mappings)
+	utils.json_utils.write_json_object(configs.ROUTES_STOP_SEQUENCE, route_paths)

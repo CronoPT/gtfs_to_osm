@@ -1,35 +1,10 @@
 
 import networkx as nx
-import json
 import osmnx as ox
 import math
-
-
-def haversine_distance(a, b):
-	'''
-	| This function computes the haversine distance
-	| between point a and point b. The distance is
-	| in kilometers.
-	'''
-
-	lat1 = a[1]
-	lat2 = b[1]
-	lon1 = a[0]
-	lon2 = b[0]
-	lat1, lat2, lon1, lon2 = map(math.radians, [lat1, lat2, lon1, lon2])
-
-	d_lat = lat2 - lat1
-	d_lon = lon2 - lon1
-
-	temp = (
-		  math.sin(d_lat/2) ** 2
-		+ math.cos(lat1)
-		* math.cos(lat2)
-		* math.sin(d_lon/2) ** 2
-	)
-
-	return 6373.0 * (2 * math.atan2(math.sqrt(temp), math.sqrt(1 - temp)))
-
+import utils.json_utils
+import utils.geometric_utils
+import configs
 
 def add_new_edges(network, edges):
 	for edge in edges:
@@ -61,11 +36,11 @@ def add_new_edges(network, edges):
 			prev_point = None
 			for curr_point in edge['geometry']:
 				if prev_point != None:
-					length += haversine_distance(prev_point, curr_point)*1000
+					length += utils.geometric_utils.haversine_distance(prev_point, curr_point)
 				prev_point = curr_point	
 
 		else:
-			length = haversine_distance(origin_point, destin_point)*1000
+			length = utils.geometric_utils.haversine_distance(origin_point, destin_point)
 
 		attrs['length'] = length
 
@@ -101,11 +76,8 @@ def add_inv_edges(network, edges):
 
 
 if __name__ == '__main__':
-	file = open('data/osm_network.json', 'r')
-	network_json = json.load(file)
-	file.close() 
 
-	road_net = nx.readwrite.json_graph.adjacency_graph(network_json)
+	road_net = utils.json_utils.read_network_json(configs.OSM_NETWORK)
 
 	new_pairs = [{
 		'origin': [-9.174212, 38.677772],
@@ -155,6 +127,4 @@ if __name__ == '__main__':
 	add_new_edges(road_net, new_pairs)
 	add_inv_edges(road_net, inv_pairs)
 
-	json_data  = nx.readwrite.json_graph.adjacency_data(road_net)
-	with open('data/network.json', 'w') as json_file:
-		json.dump(json_data, json_file, indent=4)
+	utils.json_utils.write_networkx_json(configs.TWEAKED_NETWORK, road_net)

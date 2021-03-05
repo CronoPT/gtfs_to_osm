@@ -7,8 +7,8 @@
 
 import osmnx as ox
 import networkx as nx
-import json
-import math
+import utils.json_utils
+import configs
 
 
 if __name__ == '__main__':
@@ -80,5 +80,4 @@ if __name__ == '__main__':
 				if key=='geometry':
 					adj['geometry'] = [(x, y) for x, y in value.coords]
 
-	with open('data/osm_network.json', 'w') as json_file:
-		json.dump(json_data, json_file, indent=4)
+	utils.json_utils.write_json_object(configs.OSM_NETWORK, json_data)
