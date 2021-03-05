@@ -250,6 +250,7 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 	except nx.exception.NetworkXNoPath:
 		distance = -1
 
+	# undoing everything we did to the graph
 	for link in ADD['links']:
 		road_net.add_edge(link['origin'], link['destin'], **link['attr_dict'])
 	for link in DEL['links']:
@@ -263,7 +264,17 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 
 
 def handle_triplets(Gg, Gp, gp_mappings):
-	
+	'''
+	| Implementation of handleTriple from Vuurstael et al.
+	| The idea is to pick nodes that have exacly one
+	| ingoing and one outgoing edge. Then we have to compute
+	| the shortest paths between every projection of the 
+	| node before and the node after. If any projection
+	| of the middle node appears in none of the paths, it
+	| can be discarded, if it appears in all the paths, it
+	| can be marked as decided.
+	'''
+
 	global _removed_one
 
 	for node in Gg.nodes():
@@ -356,7 +367,14 @@ def is_boundary(Gg, node, mappings):
 	
 
 def handle_non_bifurcating(Gg, Gp, gp_mappings):
-	
+	'''
+	| Implementation of handleNonBifurcatingMaximalSequences
+	| from Vuurstael et al.
+	| The idea is very similar to the handleTriples method,
+	| only this time we are looking for the biggest chain
+	| of nodes possible.
+	'''
+
 	global _removed_one
 
 	dfs_edges = list(nx.dfs_edges(Gg))
@@ -368,10 +386,12 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 		curr_origin = dfs_edge[0]
 		curr_destin = dfs_edge[1]
 
+		# the search backtracked
 		if curr_origin!=prev_destin and prev_destin!=None:
 			curr_sequence.append(prev_destin)
 			sequences.append(curr_sequence)
 			curr_sequence = []
+			prev_destin = None
 			
 		if is_boundary(Gg, curr_origin, gp_mappings):
 			curr_sequence.append(curr_origin)
@@ -537,10 +557,32 @@ def handle_stars(Gg, Gp, gp_mappings):
 					break
 
 
-def assign_projections(C, Gg, Gp, gp_mappings):
+def check_projection_state(gp_mappings):
+	'''
+	| This is a debug function to assess the number
+	| of candidate projections left to decide.
+	| For each number of possible projections left,
+	| we compute the number of stops left with that
+	| number of candidates still.
+	'''
+	max_projs_left = max([len(maps) for _, maps in gp_mappings.items()])
+	characterization = {i:0 for i in range(max_projs_left+1)}
+	for _, maps in gp_mappings.items():
+		characterization[len(maps)] += 1
+	print('projections -> count')
+	for projections, counts in characterization.items():
+		print('{} -> {}'.format(projections, counts))
 
-	global _total_combinations
-	global _combinations_tried
+
+def assign_projections(C, Gg, Gp, gp_mappings):
+	'''
+	| Implementation of assign from Vuurstael et al.
+	| For the component passed as argument, try all
+	| the combinations of assignments for the stops
+	| left to assign and assign the one in which the
+	| cost associated with all the edges in the 
+	| component is smaller.
+	'''
 
 	possible_assigns = 1
 	for node in C.nodes:
@@ -580,6 +622,14 @@ def assign_projections(C, Gg, Gp, gp_mappings):
 
 
 def fix_remaining(Gg, Gp, gp_mappings):
+	'''
+	| Vuurstael et al. does not have this step,
+	| but i found it necessary for a minority of
+	| nodes that are not reached by my component
+	| finding method. This finds nodes not yet
+	| assigned and finds the best assignment for
+	| it by looking only to the imediate neighbors.
+	'''
 
 	for node in Gg.nodes:
 		if len(gp_mappings[node])>1:
@@ -614,128 +664,55 @@ def fix_remaining(Gg, Gp, gp_mappings):
 			gp_mappings[node] = [best_opt]
 
 
-if __name__ == '__main__':
+def build_Gg(routes, stop_attributes):
+	Gg = nx.DiGraph()
+	phantom_Gg    = nx.DiGraph()
+	phantom_nodes = [] 
 
-	'''
-	| We will be introducing points in the network iterativelly,
-	| to avoid having to read the network from a json file
-	| at every iteration, this structures will allow us to track
-	| any changes made to the network and undo them once we are
-	| done, making the whole script run much faster.
-	'''
-	DEL = {'nodes': [], 'links': []}
-	ADD = {'nodes': [], 'links': []}
-
-	road_net = utils.json_utils.read_network_json(configs.TWEAKED_NETWORK)
-
-	stops_df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
-	route_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
-
-	route_ids = []
-	stop_ids  = []
-	for index, row in route_df.iterrows():
+	for index, route in enumerate(routes):
 		utils.general_utils.print_progress_bar(
 			index, 
-			route_df.shape[0], 
-			prefix='[STOP CHECK]    1/4'
+			len(routes), 
+			prefix='[G GRAPH BUILD] 3/5'
 		)
-		route_ids.append('{}{}{}'.format(row['carreira'], row['sentido'], row['variante']))
-		stop_ids.append(int(row['cod_paragem']))
-	utils.general_utils.print_progress_bar(
-		route_df.shape[0], 
-		route_df.shape[0], 
-		prefix='[STOP CHECK]    1/4'
-	)
-	route_df['shape_id'] = route_ids 
-	route_df['stop_id']  = stop_ids
-
-	nodes = {}
-	graph_edges = []
-	_purged = []
-	_g_purg = nx.DiGraph()
-	route_paths = []
-	for index, shape in enumerate(route_df['shape_id'].unique()):
-		utils.general_utils.print_progress_bar(
-			index, 
-			len(route_df['shape_id'].unique()), 
-			prefix='[GRAPH BUILD]   2/4'
-		)
-
-		sequence = route_df[ route_df['shape_id']==shape ]
-		sequence.sort_values('n_ordem')
-
-		route_path = {
-			'route_id': shape,
-			'stops': []
-		}
-		route_paths.append(route_path)
-
-		prev = None
-		for _, row in sequence.iterrows():
-			lon = row['longitude']
-			lat = row['latitude']
-			stop_id = row['stop_id']
-			coords  = (lon, lat)
-			curr    = None 
-
-			route_path['stops'].append(stop_id)
-
-			if stop_id not in nodes:
-				curr = {
-					'stop_id': stop_id,
-					'lon': lon,
-					'lat': lat,
-				}
-				nodes[stop_id] = curr
-			else:
-				curr = nodes[stop_id]
-
-			if prev != None:
-				graph_edges.append((prev['stop_id'], curr['stop_id']))
+		prev_stop = None
+		for curr_stop in route['stops']:
+			if curr_stop not in Gg.nodes:
+				Gg.add_node(curr_stop, **{
+					'lon': stop_attributes[curr_stop]['lon'],
+					'lat': stop_attributes[curr_stop]['lat'],
+				})
 			
-				if prev['stop_id'] not in _purged and curr['stop_id'] not in _purged:
+			if prev_stop != None:
+				Gg.add_edge(prev_stop, curr_stop)
+			
+				if prev_stop not in phantom_nodes and curr_stop not in phantom_nodes:
 						try:
 							distance = nx.algorithms.shortest_paths.weighted.dijkstra_path_length(
-								_g_purg, 
-								source=curr['stop_id'], 
-								target=prev['stop_id'],
+								phantom_Gg, 
+								source=curr_stop, 
+								target=prev_stop,
 							)
-							nodes[stop_id]['breaker'] = True
-							_purged.append(curr['stop_id'])
-						except nx.exception.NetworkXNoPath:
-							_g_purg.add_edge(prev['stop_id'], curr['stop_id'])
-						except nx.exception.NodeNotFound:
-							_g_purg.add_edge(prev['stop_id'], curr['stop_id'])
-			prev = curr
+							Gg.nodes[curr_stop]['breaker'] = True
+							phantom_nodes.append(curr_stop)
+						except (nx.exception.NetworkXNoPath, nx.exception.NodeNotFound):
+							phantom_Gg.add_edge(prev_stop, curr_stop)
+
+			prev_stop = curr_stop
 	
 	utils.general_utils.print_progress_bar(
-		len(route_df['shape_id'].unique()), 
-		len(route_df['shape_id'].unique()), 
-		prefix='[GRAPH BUILD]   2/4'
+		len(routes), 
+		len(routes), 
+		prefix='[G GRAPH BUILD] 3/5'
 	)
 
-	graph_nodes = []
-	for _, obj in nodes.items():
-		if 'breaker' in obj:
-			graph_nodes.append((obj['stop_id'], {
-				'lon': obj['lon'],
-				'lat': obj['lat'],
-				'breaker': True
-			}))
-		else:
-			graph_nodes.append((obj['stop_id'], {
-				'lon': obj['lon'],
-				'lat': obj['lat'],
-			}))
+	return Gg
 
-	Gg = nx.DiGraph()
-	Gg.add_nodes_from(graph_nodes)
-	Gg.add_edges_from(graph_edges)
 
-	mappings = utils.json_utils.read_json_object(configs.CANDIDATE_MAPPINGS)
+def build_Gp(Gg, mappings):
 
-	p_graph_nodes = []
-	p_graph_edges = []
+	Gp = nx.DiGraph()
+
 	_impossible_paths = []
 	_impossible_paths_assetion = []
 
@@ -746,20 +723,18 @@ if __name__ == '__main__':
 		gp_mappings[stop_id] = []
 		for projection in map_item['mappings']:
 			gp_mappings[stop_id].append(counter)
-			p_graph_nodes.append((counter ,{
+			Gp.add_node(counter, **{
 				'lon': projection['point'][0],
 				'lat': projection['point'][1]
-			}))
+			})
 
 			counter += 1
 
-	node_lon = nx.get_node_attributes(Gg, 'lon')
-	node_lat = nx.get_node_attributes(Gg, 'lat')
 	for index, edge in enumerate(Gg.edges):
 		utils.general_utils.print_progress_bar(
 			index, 
 			len(Gg.edges), 
-			prefix='[P GRAPH BUILD] 3/4'
+			prefix='[P GRAPH BUILD] 4/5'
 		)
 
 		origin_stop_id = edge[0]
@@ -786,24 +761,123 @@ if __name__ == '__main__':
 				)
 
 				if length != -1:
-					p_graph_edges.append((origin_node_id, destin_node_id, {
-						'length': length
-					}))
+					Gp.add_edge(origin_node_id, destin_node_id, length=length)
 				else:
-					p_graph_edges.append((origin_node_id, destin_node_id, {
-						'length': np.inf
-					}))
+					Gp.add_edge(origin_node_id, destin_node_id, length=np.inf)
 					_impossible_paths.append([tuple_origin_point, tuple_destin_point])	
 
 	utils.general_utils.print_progress_bar(
 		len(Gg.edges), 
 		len(Gg.edges), 
-		prefix='[P GRAPH BUILD] 3/4'
+		prefix='[P GRAPH BUILD] 4/5'
 	)
 				
-	Gp = nx.DiGraph()
-	Gp.add_nodes_from(p_graph_nodes)
-	Gp.add_edges_from(p_graph_edges)
+	return Gp, gp_mappings
+
+
+def build_final_mappings(Gp, gp_mappings, mappings):
+	final_mappings = []
+	for stop, mapping in gp_mappings.items():
+
+		stop_item = list(filter(lambda item: item['stop_id']==stop, mappings))[0]
+		point = [Gp.nodes[mapping[0]]['lon'], Gp.nodes[mapping[0]]['lat']]
+		proj_item = list(filter(lambda item: item['point']==point, stop_item['mappings']))[0]
+
+		final_mappings.append({
+			'stop_id': stop,
+			'point': [
+				Gp.nodes[mapping[0]]['lon'],
+				Gp.nodes[mapping[0]]['lat']
+			],
+			'origin_id': proj_item['origin_id'],
+			'destin_id': proj_item['destin_id'],
+			'key': proj_item['key']
+		})
+	return final_mappings
+
+
+def build_route_paths():
+	pass
+
+
+if __name__ == '__main__':
+
+	'''
+	| We will be introducing points in the network iterativelly,
+	| to avoid having to read the network from a json file
+	| at every iteration, this structures will allow us to track
+	| any changes made to the network and undo them once we are
+	| done, making the whole script run much faster.
+	'''
+	DEL = {'nodes': [], 'links': []}
+	ADD = {'nodes': [], 'links': []}
+
+	road_net = utils.json_utils.read_network_json(configs.TWEAKED_NETWORK)
+
+	stops_df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
+	route_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
+
+	route_ids = []
+	stop_ids  = []
+	for index, row in route_df.iterrows():
+		utils.general_utils.print_progress_bar(
+			index, 
+			route_df.shape[0], 
+			prefix='[STOP CHECK]    1/5'
+		)
+		route_ids.append('{}{}{}'.format(row['carreira'], row['sentido'], row['variante']))
+		stop_ids.append(int(row['cod_paragem']))
+	utils.general_utils.print_progress_bar(
+		route_df.shape[0], 
+		route_df.shape[0], 
+		prefix='[STOP CHECK]    1/5'
+	)
+	route_df['shape_id'] = route_ids 
+	route_df['stop_id']  = stop_ids
+
+	route_paths = []
+	stop_attributes = {}
+	for index, shape in enumerate(route_df['shape_id'].unique()):
+		utils.general_utils.print_progress_bar(
+			index, 
+			len(route_df['shape_id'].unique()), 
+			prefix='[ROUTE CHECK]   2/5'
+		)
+
+		sequence = route_df[ route_df['shape_id']==shape ]
+		sequence.sort_values('n_ordem')
+
+		route_path = {
+			'route_id': shape,
+			'stops': []
+		}
+		route_paths.append(route_path)
+
+		prev = None
+		for _, row in sequence.iterrows():
+			lon = row['longitude']
+			lat = row['latitude']
+			stop_id = row['stop_id']
+			coords  = (lon, lat)
+			curr    = None 
+
+			route_path['stops'].append(stop_id)
+			if stop_id not in stop_attributes:
+				stop_attributes[stop_id] = {
+					'lon': lon,
+					'lat': lat
+				}
+
+	
+	utils.general_utils.print_progress_bar(
+		len(route_df['shape_id'].unique()), 
+		len(route_df['shape_id'].unique()), 
+		prefix='[ROUTE CHECK]   2/5'
+	)
+
+	Gg = build_Gg(route_paths, stop_attributes)
+	mappings = utils.json_utils.read_json_object(configs.CANDIDATE_MAPPINGS)
+	Gp, gp_mappings = build_Gp(Gg, mappings)
 
 	_removed_one = True
 	cycles = 0
@@ -823,34 +897,35 @@ if __name__ == '__main__':
 		utils.general_utils.print_progress_bar(
 			index, 
 			len(components), 
-			prefix='[ASSIGNMENT]    4/4'
+			prefix='[ASSIGNMENT]    5/5'
 		)
 		assign_projections(component, Gg, Gp, gp_mappings)
 	utils.general_utils.print_progress_bar(
 		len(components), 
 		len(components), 
-		prefix='[ASSIGNMENT]    4/4'
+		prefix='[ASSIGNMENT]    5/5'
 	)
 
 	fix_remaining(Gg, Gp, gp_mappings)
 
-	final_mappings = []
-	for stop, mapping in gp_mappings.items():
+	final_mappings = build_final_mappings(Gp, gp_mappings, mappings)
+	# final_mappings = []
+	# for stop, mapping in gp_mappings.items():
 
-		stop_item = list(filter(lambda item: item['stop_id']==stop, mappings))[0]
-		point = [Gp.nodes[mapping[0]]['lon'], Gp.nodes[mapping[0]]['lat']]
-		proj_item = list(filter(lambda item: item['point']==point, stop_item['mappings']))[0]
+	# 	stop_item = list(filter(lambda item: item['stop_id']==stop, mappings))[0]
+	# 	point = [Gp.nodes[mapping[0]]['lon'], Gp.nodes[mapping[0]]['lat']]
+	# 	proj_item = list(filter(lambda item: item['point']==point, stop_item['mappings']))[0]
 
-		final_mappings.append({
-			'stop_id': stop,
-			'point': [
-				Gp.nodes[mapping[0]]['lon'],
-				Gp.nodes[mapping[0]]['lat']
-			],
-			'origin_id': proj_item['origin_id'],
-			'destin_id': proj_item['destin_id'],
-			'key': proj_item['key']
-		})
+	# 	final_mappings.append({
+	# 		'stop_id': stop,
+	# 		'point': [
+	# 			Gp.nodes[mapping[0]]['lon'],
+	# 			Gp.nodes[mapping[0]]['lat']
+	# 		],
+	# 		'origin_id': proj_item['origin_id'],
+	# 		'destin_id': proj_item['destin_id'],
+	# 		'key': proj_item['key']
+	# 	})
 
 	utils.json_utils.write_json_object(configs.FINAL_MAPPINGS, final_mappings)
 	utils.json_utils.write_json_object(configs.ROUTES_STOP_SEQUENCE, route_paths)
