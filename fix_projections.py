@@ -366,17 +366,7 @@ def is_boundary(Gg, node, mappings):
 		   is_cycle_breaker(Gg, node)	   
 	
 
-def handle_non_bifurcating(Gg, Gp, gp_mappings):
-	'''
-	| Implementation of handleNonBifurcatingMaximalSequences
-	| from Vuurstael et al.
-	| The idea is very similar to the handleTriples method,
-	| only this time we are looking for the biggest chain
-	| of nodes possible.
-	'''
-
-	global _removed_one
-
+def find_non_bifurcating(Gg, gp_mappings):
 	dfs_edges = list(nx.dfs_edges(Gg))
 
 	prev_destin = None
@@ -394,14 +384,72 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 			prev_destin = None
 			
 		if is_boundary(Gg, curr_origin, gp_mappings):
-			curr_sequence.append(curr_origin)
-			sequences.append(curr_sequence)
-			curr_sequence = []
+			if curr_sequence == []:
+				curr_sequence.append(curr_origin)
+			else:
+				curr_sequence.append(curr_origin)
+				sequences.append(curr_sequence)
+				curr_sequence = [curr_origin]
 		else:
 			curr_sequence.append(curr_origin)
 
+		# needed for last edge since we look at the origin only
+		if index == len(dfs_edges)-1:
+			if is_boundary(Gg, curr_destin, gp_mappings):
+				curr_sequence.append(curr_destin)
+				sequences.append(curr_sequence)
+
 		prev_destin = curr_destin
 
+	return sequences
+
+
+def filter_Gp_for_pathfinding(sequence, Gp, gp_mappings):
+	'''
+	| This function creates a subgraph of Gp where only
+	| the nodes in the sequence appear but not all the
+	| edges between them exist. Only the edges that 
+	| follow the direction of the sequence are present.
+	| Imagine you have the sequence [A, B, C, D], so there
+	| are the following edges in Gg: [(A, B), (B, C), (C, D)]
+	| and aditionally, imagine that there is a low cost edge
+	| (A, D). If we try to compute shortest paths between A
+	| and D in the original graph, we will no get paths
+	| going through B and C which we need because that is
+	| the only way in which we will be able to make good
+	| decisions about what projections of B and C to keep. 
+	'''
+
+	new_Gp = nx.DiGraph()
+
+	origin = None
+	for destin in sequence:
+
+		if origin != None:
+			for p_origin in  gp_mappings[origin]:
+				for p_destin in gp_mappings[destin]:
+					new_Gp.add_edge(
+						p_origin,
+						p_destin,
+						**Gp.get_edge_data(p_origin, p_destin)
+					)
+
+		origin = destin
+
+	return new_Gp
+
+def handle_non_bifurcating(Gg, Gp, gp_mappings):
+	'''
+	| Implementation of handleNonBifurcatingMaximalSequences
+	| from Vuurstael et al.
+	| The idea is very similar to the handleTriples method,
+	| only this time we are looking for the biggest chain
+	| of nodes possible.
+	'''
+
+	global _removed_one
+
+	sequences = find_non_bifurcating(Gg, gp_mappings)
 	sequences = [s for s in sequences if len(s)>2]
 	
 	for sequence in sequences:
@@ -414,15 +462,23 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 
 		path_counts = {n:{m:0 for m in gp_mappings[n]} for n in middle} 
 		total_paths = len(origin_mappings)*len(destin_mappings)
+		new_Gp = filter_Gp_for_pathfinding(sequence, Gp, gp_mappings)
 		for or_map in origin_mappings:
 			for de_map in destin_mappings:
 				try:
+
 					path = nx.algorithms.shortest_paths.weighted.dijkstra_path(
-						Gp, 
+						new_Gp, 
 						source=or_map, 
 						target=de_map,
 						weight='length'
 					)
+
+					if len(sequence)!=len(path):
+						print(sequence)
+						print(path)
+						print({i: j for i,j in gp_mappings.items() if i in sequence})
+						print('Alto')
 
 					for index, p_node in enumerate(path[1:-1]):
 						path_counts[middle[index]][p_node] += 1
@@ -885,13 +941,12 @@ if __name__ == '__main__':
 		_removed_one = False
 
 		handle_triplets(Gg, Gp, gp_mappings)
-
 		handle_non_bifurcating(Gg, Gp, gp_mappings)
-
 		handle_stars(Gg, Gp, gp_mappings)
 		cycles += 1
 
 	components = decompose(Gg, Gp, gp_mappings)
+
 
 	for index, component in enumerate(components):
 		utils.general_utils.print_progress_bar(
@@ -909,23 +964,6 @@ if __name__ == '__main__':
 	fix_remaining(Gg, Gp, gp_mappings)
 
 	final_mappings = build_final_mappings(Gp, gp_mappings, mappings)
-	# final_mappings = []
-	# for stop, mapping in gp_mappings.items():
-
-	# 	stop_item = list(filter(lambda item: item['stop_id']==stop, mappings))[0]
-	# 	point = [Gp.nodes[mapping[0]]['lon'], Gp.nodes[mapping[0]]['lat']]
-	# 	proj_item = list(filter(lambda item: item['point']==point, stop_item['mappings']))[0]
-
-	# 	final_mappings.append({
-	# 		'stop_id': stop,
-	# 		'point': [
-	# 			Gp.nodes[mapping[0]]['lon'],
-	# 			Gp.nodes[mapping[0]]['lat']
-	# 		],
-	# 		'origin_id': proj_item['origin_id'],
-	# 		'destin_id': proj_item['destin_id'],
-	# 		'key': proj_item['key']
-	# 	})
 
 	utils.json_utils.write_json_object(configs.FINAL_MAPPINGS, final_mappings)
 	utils.json_utils.write_json_object(configs.ROUTES_STOP_SEQUENCE, route_paths)
