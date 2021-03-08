@@ -263,19 +263,9 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 	return distance
 
 
-def handle_triplets(Gg, Gp, gp_mappings):
-	'''
-	| Implementation of handleTriple from Vuurstael et al.
-	| The idea is to pick nodes that have exacly one
-	| ingoing and one outgoing edge. Then we have to compute
-	| the shortest paths between every projection of the 
-	| node before and the node after. If any projection
-	| of the middle node appears in none of the paths, it
-	| can be discarded, if it appears in all the paths, it
-	| can be marked as decided.
-	'''
+def find_triplets(Gg, gp_mappings):
 
-	global _removed_one
+	triplets = []
 
 	for node in Gg.nodes():
 		in_deg  = Gg.in_degree(node)
@@ -289,44 +279,77 @@ def handle_triplets(Gg, Gp, gp_mappings):
 			before_node = [u for u, _ in in_edge ][0]
 			after_node  = [v for _, v in out_edge][0]
 
-			before_mappings = gp_mappings[before_node] 
-			after_mappings  = gp_mappings[after_node]
+			if before_node != after_node:
+				triplets.append([before_node, node, after_node])
 
-			total_paths = len(before_mappings)*len(after_mappings)
-			path = []
-			path_cost = 0
-			path_counting = {p_node:0 for p_node in this_mappings} 
-			for before_map in before_mappings:
-				for after_map in after_mappings:
+	return triplets
 
-					min_cost = np.inf
-					min_cost_path = []
-					for proj in this_mappings:
-						
-						cost = Gp.get_edge_data(before_map, proj)['length'] + \
-						       Gp.get_edge_data(proj, after_map)['length']
 
-						if cost < min_cost:
-							min_cost_path = [before_map, proj, after_map]
-							min_cost = cost	
+def handle_sequences(Gg, Gp, gp_mappings, sequences):
+	
+	global _removed_one
 
-					path = min_cost_path
-					path_cost = min_cost
+	for sequence in sequences:
+		origin = sequence[0]
+		destin = sequence[-1]
+		middle = sequence[1:-1]
 
-					for p_node in this_mappings:
-						if p_node in path:
-							path_counting[p_node] += 1
+		origin_mappings = gp_mappings[origin]
+		destin_mappings = gp_mappings[destin]
 
-			for p_node, count in path_counting.items():
-				if count==0:
+		path_counts = {n:{m:0 for m in gp_mappings[n]} for n in middle} 
+		total_paths = len(origin_mappings)*len(destin_mappings)
+		new_Gp = filter_Gp_for_pathfinding(sequence, Gp, gp_mappings)
+		for or_map in origin_mappings:
+			for de_map in destin_mappings:
+				try:
+
+					path = nx.algorithms.shortest_paths.weighted.dijkstra_path(
+						new_Gp, 
+						source=or_map, 
+						target=de_map,
+						weight='length'
+					)
+
+					if len(sequence)!=len(path):
+						print(sequence)
+						print(path)
+						print({i: j for i,j in gp_mappings.items() if i in sequence})
+						print('Alto')
+
+					for index, p_node in enumerate(path[1:-1]):
+						path_counts[middle[index]][p_node] += 1
+				
+				except nx.exception.NetworkXNoPath:
+					total_paths -= 1
+
+		for node, countings in path_counts.items():
+			for p_node, count in countings.items():
+				if count == 0:
 					Gp.remove_node(p_node)
 					gp_mappings[node].remove(p_node)
 					_removed_one = True
-				elif count==total_paths:
+				elif count == total_paths:
 					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
 					gp_mappings[node] = [p_node]
 					_removed_one = True
 					break
+
+
+def handle_triplets(Gg, Gp, gp_mappings):
+	'''
+	| Implementation of handleTriple from Vuurstael et al.
+	| The idea is to pick nodes that have exacly one
+	| ingoing and one outgoing edge. Then we have to compute
+	| the shortest paths between every projection of the 
+	| node before and the node after. If any projection
+	| of the middle node appears in none of the paths, it
+	| can be discarded, if it appears in all the paths, it
+	| can be marked as decided.
+	'''
+
+	triplets = find_triplets(Gg, gp_mappings)
+	handle_sequences(Gg, Gp, gp_mappings, triplets)
 
 
 def is_sink(G, node):
@@ -438,6 +461,7 @@ def filter_Gp_for_pathfinding(sequence, Gp, gp_mappings):
 
 	return new_Gp
 
+
 def handle_non_bifurcating(Gg, Gp, gp_mappings):
 	'''
 	| Implementation of handleNonBifurcatingMaximalSequences
@@ -447,56 +471,9 @@ def handle_non_bifurcating(Gg, Gp, gp_mappings):
 	| of nodes possible.
 	'''
 
-	global _removed_one
-
 	sequences = find_non_bifurcating(Gg, gp_mappings)
 	sequences = [s for s in sequences if len(s)>2]
-	
-	for sequence in sequences:
-		origin = sequence[0]
-		destin = sequence[-1]
-		middle = sequence[1:-1]
-
-		origin_mappings = gp_mappings[origin]
-		destin_mappings = gp_mappings[destin]
-
-		path_counts = {n:{m:0 for m in gp_mappings[n]} for n in middle} 
-		total_paths = len(origin_mappings)*len(destin_mappings)
-		new_Gp = filter_Gp_for_pathfinding(sequence, Gp, gp_mappings)
-		for or_map in origin_mappings:
-			for de_map in destin_mappings:
-				try:
-
-					path = nx.algorithms.shortest_paths.weighted.dijkstra_path(
-						new_Gp, 
-						source=or_map, 
-						target=de_map,
-						weight='length'
-					)
-
-					if len(sequence)!=len(path):
-						print(sequence)
-						print(path)
-						print({i: j for i,j in gp_mappings.items() if i in sequence})
-						print('Alto')
-
-					for index, p_node in enumerate(path[1:-1]):
-						path_counts[middle[index]][p_node] += 1
-				
-				except nx.exception.NetworkXNoPath:
-					total_paths -= 1
-
-		for node, countings in path_counts.items():
-			for p_node, count in countings.items():
-				if count == 0:
-					Gp.remove_node(p_node)
-					gp_mappings[node].remove(p_node)
-					_removed_one = True
-				elif count == total_paths:
-					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
-					gp_mappings[node] = [p_node]
-					_removed_one = True
-					break
+	handle_sequences(Gg, Gp, gp_mappings, sequences)
 
 
 def is_component_boundary(Gg, node, gp_mappings):
