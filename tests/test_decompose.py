@@ -96,3 +96,6 @@ class test_decompose(unittest.TestCase):
 
 		for edge in components[1].edges:
 			self.assertIn(edge, C2.edges)
+
+if __name__ == '__init__':
+	unittest.main()
