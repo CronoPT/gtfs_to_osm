@@ -538,56 +538,76 @@ def mark_as_cycle_breaker(G, node):
 	G.nodes[node]['breaker'] = True
 
 
-def handle_stars(Gg, Gp, gp_mappings):
-	
-	global _removed_one
+def find_stars(Gg, gp_mappings):
 
+	stars = []
 	for node in Gg.nodes():
 		in_deg  = Gg.in_degree(node)
 		out_deg = Gg.out_degree(node)
-		this_mappings = gp_mappings[node]
 
 		if ((in_deg==1 and out_deg>1) or (in_deg>1 and out_deg==1)) and \
 		   len(gp_mappings[node])>1:
 
 			before_nodes = [u for u, _ in Gg.in_edges(node)]
 			after_nodes  = [v for _, v in Gg.out_edges(node)]
+			
+			stars.append({
+				'center': node,
+				'before': before_nodes,
+				'after' : after_nodes
+			})
+	
+	return stars
+		
 
-			path_count  = {n:0 for n in this_mappings}
-			total_paths = 0
-			for before_node in before_nodes:
-				for after_node in after_nodes:
-					origin_mappings = gp_mappings[before_node]
-					destin_mappings = gp_mappings[after_node]
+def handle_stars(Gg, Gp, gp_mappings):
+	
+	global _removed_one
 
-					total_paths += len(origin_mappings)*len(destin_mappings)
+	stars = find_stars(Gg, gp_mappings)
 
-					
-					for or_map in origin_mappings:
-						for de_map in destin_mappings:
-							min_path = None
-							min_path_cost = np.inf
-							for this_map in this_mappings:
-								path_cost  = Gp.get_edge_data(or_map, this_map)['length']
-								path_cost += Gp.get_edge_data(this_map, de_map)['length']
-								if path_cost < min_path_cost:
-									min_path = this_map
-									min_path_cost = path_cost
-							
+	for star in stars:
+		node = star['center']
+		before_nodes = star['before']
+		after_nodes  = star['after']
 
-							path_count[min_path] += 1
+		this_mappings = gp_mappings[node]
+
+		path_count  = {n:0 for n in this_mappings}
+		total_paths = 0
+		for before_node in before_nodes:
+			for after_node in after_nodes:
+				origin_mappings = gp_mappings[before_node]
+				destin_mappings = gp_mappings[after_node]
+
+				total_paths += len(origin_mappings)*len(destin_mappings)
+
+				
+				for or_map in origin_mappings:
+					for de_map in destin_mappings:
+						min_path = None
+						min_path_cost = np.inf
+						for this_map in this_mappings:
+							path_cost  = Gp.get_edge_data(or_map, this_map)['length']
+							path_cost += Gp.get_edge_data(this_map, de_map)['length']
+							if path_cost < min_path_cost:
+								min_path = this_map
+								min_path_cost = path_cost
+						
+
+						path_count[min_path] += 1
 
 
-			for p_node, count in path_count.items():
-				if count==0:
-					Gp.remove_node(p_node)
-					gp_mappings[node].remove(p_node)
-					_removed_one = True
-				elif count==total_paths: 
-					[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
-					gp_mappings[node] = [p_node]
-					_removed_one = True
-					break
+		for p_node, count in path_count.items():
+			if count==0:
+				Gp.remove_node(p_node)
+				gp_mappings[node].remove(p_node)
+				_removed_one = True
+			elif count==total_paths: 
+				[Gp.remove_node(n) for n in gp_mappings[node] if n != p_node]
+				gp_mappings[node] = [p_node]
+				_removed_one = True
+				break
 
 
 def check_projection_state(gp_mappings):
