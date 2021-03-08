@@ -506,7 +506,7 @@ def is_component_boundary(Gg, node, gp_mappings):
 		   is_assigned(node, gp_mappings) 
 
 
-def decompose(Gg, Gp, gp_mappings):
+def decompose(Gg, gp_mappings):
 	components = []
 	
 	sources = [node for node in Gg.nodes if is_source(Gg, node)]
@@ -945,8 +945,7 @@ if __name__ == '__main__':
 		handle_stars(Gg, Gp, gp_mappings)
 		cycles += 1
 
-	components = decompose(Gg, Gp, gp_mappings)
-
+	components = decompose(Gg, gp_mappings)
 
 	for index, component in enumerate(components):
 		utils.general_utils.print_progress_bar(
