@@ -159,36 +159,4 @@ def lines_intersect(line1, line2):
   
 	# If none of the cases 
 	return False
-
-
-def test_lines_intersect():
-	'''
-	| Small test suit for the 'lines_intersect' function
-	'''
-	line_a = [[2,  1], [5,  1]]
-	line_b = [[3, -1], [3,  3]]
-	line_c = [[2,  2], [5,  2]]
-	line_d = [[2,  4], [4, -1]]
-	line_e = [[4, -1], [2,  4]]
-
-	line_f = [[-4, 5], [-1, 5]]
-	line_g = [[-1, 5], [-1, 1]]
-	line_h = [[-1, 1], [-4, 1]]
-	line_i = [[-4, 1], [-4, 5]]
-	line_j = [[-3, 3], [-5, 3]]
-
-	print('Line A and B intercect      {}'.format('[OK]' if lines_intersect(line_a, line_b) else '[FAILED]'))
-	print('Line A and C DONT intercect {}'.format('[OK]' if not lines_intersect(line_a, line_c) else '[FAILED]'))
-	print('Line B and C intercect      {}'.format('[OK]' if lines_intersect(line_b, line_c) else '[FAILED]'))
-	print('Line D and A intercect      {}'.format('[OK]' if lines_intersect(line_d, line_a) else '[FAILED]'))
-	print('Line D and B intercect      {}'.format('[OK]' if lines_intersect(line_d, line_b) else '[FAILED]'))
-	print('Line D and C intercect      {}'.format('[OK]' if lines_intersect(line_d, line_c) else '[FAILED]'))
-	print('Line E and A intercect      {}'.format('[OK]' if lines_intersect(line_e, line_a) else '[FAILED]'))
-	print('Line E and B intercect      {}'.format('[OK]' if lines_intersect(line_e, line_b) else '[FAILED]'))
-	print('Line E and C intercect      {}'.format('[OK]' if lines_intersect(line_e, line_c) else '[FAILED]'))
-
-	print('Line J and F DONT intercect {}'.format('[OK]' if not lines_intersect(line_j, line_f) else '[FAILED]'))
-	print('Line J and G DONT intercect {}'.format('[OK]' if not lines_intersect(line_j, line_g) else '[FAILED]'))
-	print('Line J and H DONT intercect {}'.format('[OK]' if not lines_intersect(line_j, line_h) else '[FAILED]'))
-	print('Line J and I intercect      {}'.format('[OK]' if lines_intersect(line_j, line_i) else '[FAILED]'))
 	
