@@ -717,10 +717,10 @@ def fix_remaining(Gg, Gp, gp_mappings):
 			gp_mappings[node] = [best_opt]
 
 
-def build_Gg(routes, stop_attributes):
+def build_Gg(routes, stop_attributes, mappings_count):
 	Gg = nx.DiGraph()
 	phantom_Gg    = nx.DiGraph()
-	phantom_nodes = [] 
+	phantom_nodes = {}
 
 	for index, route in enumerate(routes):
 		utils.general_utils.print_progress_bar(
@@ -739,17 +739,22 @@ def build_Gg(routes, stop_attributes):
 			if prev_stop != None:
 				Gg.add_edge(prev_stop, curr_stop)
 			
-				if prev_stop not in phantom_nodes and curr_stop not in phantom_nodes:
-						try:
-							distance = nx.algorithms.shortest_paths.weighted.dijkstra_path_length(
-								phantom_Gg, 
-								source=curr_stop, 
-								target=prev_stop,
-							)
-							Gg.nodes[curr_stop]['breaker'] = True
-							phantom_nodes.append(curr_stop)
-						except (nx.exception.NetworkXNoPath, nx.exception.NodeNotFound):
+				if prev_stop not in phantom_nodes and curr_stop not in phantom_nodes \
+					and mappings_count[prev_stop]>1 and mappings_count[curr_stop]>1:
+
+						if prev_stop not in phantom_Gg.nodes:
+							phantom_Gg.add_node(prev_stop)
+						if curr_stop not in phantom_Gg.nodes:
+							phantom_Gg.add_node(curr_stop)
+
+						if nx.has_path(phantom_Gg, curr_stop, prev_stop):
 							phantom_Gg.add_edge(prev_stop, curr_stop)
+						else:
+							Gg.nodes[curr_stop]['breaker'] = True
+
+							if curr_stop not in phantom_nodes:
+								phantom_nodes[curr_stop] = []
+							phantom_nodes[curr_stop].append(prev_stop)
 
 			prev_stop = curr_stop
 	
@@ -759,7 +764,7 @@ def build_Gg(routes, stop_attributes):
 		prefix='[G GRAPH BUILD] 3/5'
 	)
 
-	return Gg
+	return Gg, phantom_Gg, phantom_nodes
 
 
 def build_Gp(Gg, mappings):
@@ -853,6 +858,26 @@ def build_route_paths():
 	pass
 
 
+def reduce_cycle_breakers(Gg, phantom_Gg, phantom_nodes, gp_mappings):
+
+	for node in gp_mappings:
+		if node in phantom_Gg.nodes and len(gp_mappings[node])==1:
+			phantom_Gg.remove_node(node)
+
+	to_materialize = []
+	for phantom, destins in phantom_nodes.items():
+		can_unmark = True
+		for destin in destins:
+			if len(gp_mappings[phantom])>1 and len(gp_mappings[destin])>1: 
+				if nx.has_path(phantom_Gg, phantom, destin):
+					can_unmark = False
+		if can_unmark:
+			del Gg.nodes[phantom]['breaker']
+			to_materialize.append(phantom)
+
+	[phantom_nodes.pop(node) for node in to_materialize]
+
+
 if __name__ == '__main__':
 
 	'''
@@ -928,18 +953,21 @@ if __name__ == '__main__':
 		prefix='[ROUTE CHECK]   2/5'
 	)
 
-	Gg = build_Gg(route_paths, stop_attributes)
 	mappings = utils.json_utils.read_json_object(configs.CANDIDATE_MAPPINGS)
+
+	mappings_count = {item['stop_id']: len(item['mappings']) for item in mappings}
+	Gg, phantom_Gg, phantom_nodes = build_Gg(route_paths, stop_attributes, mappings_count)
 	Gp, gp_mappings = build_Gp(Gg, mappings)
 
 	_removed_one = True
 	cycles = 0
 	while _removed_one:
 		_removed_one = False
-
 		handle_triplets(Gg, Gp, gp_mappings)
 		handle_non_bifurcating(Gg, Gp, gp_mappings)
 		handle_stars(Gg, Gp, gp_mappings)
+		reduce_cycle_breakers(Gg, phantom_Gg, phantom_nodes, gp_mappings)
+
 		cycles += 1
 
 	components = decompose(Gg, gp_mappings)
