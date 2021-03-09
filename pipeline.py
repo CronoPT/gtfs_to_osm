@@ -18,10 +18,6 @@ if __name__ == '__main__':
 	]
 
 	for index, script in enumerate(scripts):
-		print('[PIPELINE] Starting {} - {}/{}'.format(
-			script, index+1, len(scripts)
-		))
+		print(f'[PIPELINE] Starting {script} - {index+1}/{len(scripts)}')
 		subprocess.call(['python3', script])
-		print('[PIPELINE] Finished {} - {}/{}'.format(
-			script, index+1, len(scripts)
-		))
+		print(f'[PIPELINE] Finished {script} - {index+1}/{len(scripts)}')

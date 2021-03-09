@@ -624,7 +624,7 @@ def check_projection_state(gp_mappings):
 		characterization[len(maps)] += 1
 	print('projections -> count')
 	for projections, counts in characterization.items():
-		print('{} -> {}'.format(projections, counts))
+		print(f'{projections} -> {counts}')
 
 
 def assign_projections(C, Gg, Gp, gp_mappings):
@@ -878,7 +878,7 @@ if __name__ == '__main__':
 			route_df.shape[0], 
 			prefix='[STOP CHECK]    1/5'
 		)
-		route_ids.append('{}{}{}'.format(row['carreira'], row['sentido'], row['variante']))
+		route_ids.append(f'{row["carreira"]}{row["sentido"]}{row["variante"]}')
 		stop_ids.append(int(row['cod_paragem']))
 	utils.general_utils.print_progress_bar(
 		route_df.shape[0], 
