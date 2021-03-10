@@ -740,21 +740,55 @@ def build_Gg(routes, stop_attributes, mappings_count):
 				Gg.add_edge(prev_stop, curr_stop)
 			
 				if prev_stop not in phantom_nodes and curr_stop not in phantom_nodes \
-					and mappings_count[prev_stop]>1 and mappings_count[curr_stop]>1:
+				   and mappings_count[prev_stop]>1 and mappings_count[curr_stop]>1:
 
-						if prev_stop not in phantom_Gg.nodes:
-							phantom_Gg.add_node(prev_stop)
-						if curr_stop not in phantom_Gg.nodes:
-							phantom_Gg.add_node(curr_stop)
+					phantom_Gg.add_edge(prev_stop, curr_stop)
+					
+					if nx.has_path(phantom_Gg, curr_stop, prev_stop):
+						
+						paths = nx.all_simple_paths(phantom_Gg, curr_stop, prev_stop)
+						
+						lst_paths = [path for path in paths]
+						set_paths = [set(path) for path in lst_paths]
 
-						if nx.has_path(phantom_Gg, curr_stop, prev_stop):
-							phantom_Gg.add_edge(prev_stop, curr_stop)
-						else:
-							Gg.nodes[curr_stop]['breaker'] = True
+						intersection_res = set_paths[0]
+						for path in set_paths[1:]:
+							intersection_res = intersection_res.intersection(path)
+						
+						minimal_DOF  = np.inf
+						minimal_node = None 
+						for node in intersection_res:
+							if mappings_count[node]<minimal_DOF:
+								minimal_DOF  = mappings_count[node]
+								minimal_node = node
 
-							if curr_stop not in phantom_nodes:
-								phantom_nodes[curr_stop] = []
-							phantom_nodes[curr_stop].append(prev_stop)
+						if minimal_node not in phantom_nodes:
+							phantom_nodes[minimal_node] = {
+								'before': [],
+								'after':  []
+							}
+
+						in_edges  = phantom_Gg.in_edges(minimal_node)
+						out_edges = phantom_Gg.out_edges(minimal_node)
+
+						for u, _ in in_edges:
+							if u not in phantom_nodes[minimal_node]['before']:
+								phantom_nodes[minimal_node]['before'].append(u)
+						for _, v in out_edges:
+							if v not in phantom_nodes[minimal_node]['after']:
+								phantom_nodes[minimal_node]['after'].append(v)
+
+						phantom_Gg.remove_node(minimal_node) 
+
+						Gg.nodes[minimal_node]['breaker'] = True
+
+				else:
+					if prev_stop in phantom_nodes:
+						if curr_stop not in phantom_nodes[prev_stop]['after']:
+							phantom_nodes[prev_stop]['after'].append(curr_stop)
+					if curr_stop in phantom_nodes:
+						if prev_stop not in phantom_nodes[curr_stop]['before']:
+							phantom_nodes[curr_stop]['before'].append(prev_stop)
 
 			prev_stop = curr_stop
 	
@@ -854,10 +888,6 @@ def build_final_mappings(Gp, gp_mappings, mappings):
 	return final_mappings
 
 
-def build_route_paths():
-	pass
-
-
 def reduce_cycle_breakers(Gg, phantom_Gg, phantom_nodes, gp_mappings):
 
 	for node in gp_mappings:
@@ -865,15 +895,26 @@ def reduce_cycle_breakers(Gg, phantom_Gg, phantom_nodes, gp_mappings):
 			phantom_Gg.remove_node(node)
 
 	to_materialize = []
-	for phantom, destins in phantom_nodes.items():
+	for phantom, phantom_item in phantom_nodes.items():
 		can_unmark = True
-		for destin in destins:
-			if len(gp_mappings[phantom])>1 and len(gp_mappings[destin])>1: 
-				if nx.has_path(phantom_Gg, phantom, destin):
+
+		for before_node in phantom_item['before']:
+			if before_node not in phantom_nodes:
+				phantom_Gg.add_edge(before_node, phantom)
+				if nx.has_path(phantom_Gg, phantom, before_node):
 					can_unmark = False
+
+		for after_node in phantom_item['after']:
+			if after_node not in phantom_nodes:
+				phantom_Gg.add_edge(phantom, after_node)
+				if nx.has_path(phantom_Gg, after_node, phantom):
+					can_unmark = False
+
 		if can_unmark:
-			del Gg.nodes[phantom]['breaker']
+			Gg.nodes[phantom].pop('breaker')
 			to_materialize.append(phantom)
+		else:
+			phantom_Gg.remove_node(phantom)
 
 	[phantom_nodes.pop(node) for node in to_materialize]
 
@@ -967,7 +1008,6 @@ if __name__ == '__main__':
 		handle_non_bifurcating(Gg, Gp, gp_mappings)
 		handle_stars(Gg, Gp, gp_mappings)
 		reduce_cycle_breakers(Gg, phantom_Gg, phantom_nodes, gp_mappings)
-
 		cycles += 1
 
 	components = decompose(Gg, gp_mappings)
