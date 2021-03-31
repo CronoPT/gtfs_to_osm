@@ -78,3 +78,9 @@ ROUTE_SHAPES = 'data/geojson/route_shapes.geojson'
 | can then visualize them.
 '''
 STOP_LOCATIONS = 'data/geojson/stop_locations.geojson'
+
+'''
+| The network after having all the stop 
+| fixed projections as nodes in the network
+'''
+FINAL_NETWORK = 'data/json/final_network.json'

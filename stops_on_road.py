@@ -262,3 +262,4 @@ if __name__ == '__main__':
 		configs.STOP_LOCATIONS,
 		[item['point'] for item in stop_points]
 	)
+	utils.json_utils.write_networkx_json(configs.FINAL_NETWORK, road_net)
