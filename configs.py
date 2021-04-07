@@ -83,4 +83,14 @@ STOP_LOCATIONS = 'data/geojson/stop_locations.geojson'
 | The network after having all the stop 
 | fixed projections as nodes in the network
 '''
+NETWORK_WITH_STOPS = 'data/json/network_with_stops.json'
+
 FINAL_NETWORK = 'data/json/final_network.json'
+
+CLUSTERED_STOPS = 'data/geojson/clustered_stop_locations.geojson'
+
+CLUSTERED_ROUTES = 'data/json/clustered_routes_stop_sequence.json'
+
+CLUSTERED_STOP_LOCATIONS = 'data/geojson/clustered_stop_locations.geojson'
+
+CLUSTERED_ROUTE_SHAPES = 'data/geojson/clustered_route_shapes.geojson'
