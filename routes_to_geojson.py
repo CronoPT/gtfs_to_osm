@@ -63,3 +63,4 @@ if __name__ == '__main__':
 		sys.argv[5],
 		[item['point'] for item in stop_points]
 	)
+

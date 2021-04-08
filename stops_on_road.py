@@ -49,27 +49,45 @@ def compute_distance_to_or_and_de(point, coords):
 				else:
 					distance_to_de += utils.geometric_utils.haversine_distance(prev, curr)
 					de_geometry.append(curr)
+		else:
+			or_geometry.append(curr)
 
 		prev = curr
 
 	return distance_to_or, distance_to_de, or_geometry, de_geometry
 
 
-def update_observer_edge(network, new_edge, observer):
+def update_observer_edge(net, new_edge, observer):
 	'''
 	| If observer shares some point with the newly
 	| introduced edge, the observer must be updated.
 	'''
 
-	if observer['origin_id'] == new_edge['origin'] and \
-		network.get_edge_data(observer['origin_id'], observer['destin_id'], key=observer['key']) == None:
-		observer['destin_id'] = new_edge['destin']
-		observer['key'] = 0
-	elif observer['destin_id'] == new_edge['destin'] and \
-		network.get_edge_data(observer['origin_id'], observer['destin_id'], key=observer['key']) == None:
-		observer['origin_id'] = new_edge['origin']
-		observer['key'] = 0
-
+	if 'geometry' in new_edge:
+		origin = None
+		for destin in new_edge['geometry']:
+			if origin != None:
+				if utils.geometric_utils.point_belongs_to_line(
+					observer['point'],
+					[origin, destin]
+				):
+					observer['origin_id'] = new_edge['origin']
+					observer['destin_id'] = new_edge['destin']
+					observer['key'] = 0
+					return
+			origin = destin 
+	else:
+		origin = new_edge['origin']
+		destin = new_edge['destin']
+		if utils.geometric_utils.point_belongs_to_line(
+			observer['point'],[
+				[net.nodes[origin]['x'], net.nodes[origin]['y']],
+				[net.nodes[destin]['x'], net.nodes[destin]['y']]
+			]
+		):
+			observer['origin_id'] = new_edge['origin']
+			observer['destin_id'] = new_edge['destin']
+			observer['key'] = 0
 
 def insert_point_as_node(net, node_id, point_info, observers=[]):
 	'''
@@ -102,7 +120,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 	)
 
 	keep_attributes = {key: value for key, value in edge_to_intersect.items() if key not in [
-		'length', 'geometry', 'origin', 'destin', 'key'
+		'length', 'geometry', 'origin', 'destin', 'key', 'id'
 	]}
 
 	point = point_info['point']
@@ -146,7 +164,8 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 			**{
 				'length': distance_to_or,
 				'origin': point_info['origin_id'],
-				'destin': node_id
+				'destin': node_id,
+				# 'id': node_id
 			}, **keep_attributes
 		)
 
@@ -156,7 +175,8 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 			**{
 				'length': distance_to_de,
 				'origin': node_id,
-				'destin': point_info['destin_id']
+				'destin': point_info['destin_id'],
+				# 'id': point_info['destin_id']
 			}, **keep_attributes
 		)
 	else:
@@ -167,6 +187,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				'length': distance_to_or,
 				'origin': point_info['origin_id'],
 				'destin': node_id,
+				# 'id': node_id,
 				'geometry': or_geometry
 			}, **keep_attributes
 		)
@@ -177,6 +198,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				'length': distance_to_de,
 				'origin': node_id,
 				'destin': point_info['destin_id'],
+				# 'id': point_info['destin_id'],
 				'geometry': de_geometry
 			}, **keep_attributes
 		)
@@ -193,7 +215,12 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 			observer['destin_id'],
 			key = observer['key']  
 		)
+
 		if edge_to_keep == None:
+
+			# if observer['stop_id'] in [3801, 3810, 3811, 3807]:
+			# 	print(observer)
+
 			new_edge_1 = net.get_edge_data(
 				point_info['origin_id'],
 				node_id,
@@ -206,6 +233,13 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 			)
 			update_observer_edge(net, new_edge_1, observer)
 			update_observer_edge(net, new_edge_2, observer)
+
+			# if observer['stop_id'] in [3801, 3810, 3811, 3807]:
+			# 	print(observer)
+			# 	print('Removed', edge_to_intersect)
+			# 	print('New', new_edge_1)
+			# 	print('New', new_edge_2)
+			# 	print()
 
 
 if __name__ == '__main__':
@@ -223,58 +257,4 @@ if __name__ == '__main__':
 		road_net.nodes[stop_id]['x'] = stop_item['point'][0]
 		road_net.nodes[stop_id]['y'] = stop_item['point'][1]
 
-	# routes = []
-	# for route_info in route_paths:
-	# 	stops  = route_info['stops']
-	# 	origin = None
-	# 	route  = []
-	# 	for index, destin in enumerate(stops):
-	# 		if origin != None:
-	# 			path = nx.algorithms.shortest_paths.weighted.dijkstra_path(
-	# 				road_net, 
-	# 				source=origin, 
-	# 				target=destin,
-	# 				weight='length'
-	# 			)
-
-	# 			path_in_coordinates = []
-	# 			origin_node = None
-	# 			for index, destin_node in enumerate(path):
-	# 				if origin_node != None:
-	# 					edge_info = road_net.get_edge_data(origin_node, destin_node)
-
-	# 					best_edge = None
-	# 					best_cost = np.inf
-	# 					for key, edge_data in edge_info.items():
-	# 						length = edge_data['length']
-	# 						if length < best_cost:
-	# 							best_cost = length
-	# 							best_edge = edge_data 
-
-	# 					if 'geometry' in best_edge:
-	# 						path_in_coordinates.extend(best_edge['geometry'])
-	# 					else:
-	# 						path_in_coordinates.extend([
-	# 							[road_net.nodes[origin_node]['x'], road_net.nodes[origin_node]['y']],
-	# 							[road_net.nodes[destin_node]['x'], road_net.nodes[destin_node]['y']]
-	# 						])
-	# 				origin_node = destin_node
-
-	# 			if index==0:
-	# 				route.extend(path_in_coordinates)
-	# 			else:
-	# 				route.extend(path_in_coordinates[1:])
-
-	# 		origin = destin
-		
-	# 	routes.append(route)
-
-	# utils.json_utils.write_geojson_lines(
-	# 	configs.ROUTE_SHAPES, 
-	# 	routes
-	# )
-	# utils.json_utils.write_geojson_points(
-	# 	configs.STOP_LOCATIONS,
-	# 	[item['point'] for item in stop_points]
-	# )
 	utils.json_utils.write_networkx_json(configs.NETWORK_WITH_STOPS, road_net)

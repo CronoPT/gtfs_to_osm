@@ -56,22 +56,48 @@ def compute_distance_to_or_and_de(point, coords):
 				else:
 					distance_to_de += utils.geometric_utils.haversine_distance(prev, curr)
 					de_geometry.append(curr)
+		else:
+			or_geometry.append(curr)
 
 		prev = curr
 
 	return distance_to_or, distance_to_de, or_geometry, de_geometry
 
 
-def update_observer_edge(new_edge, observer):
+def update_observer_edge(net, new_edge, observer):
 	'''
 	| If observer shares some point with the newly
 	| introduced edge, the observer must be updated.
 	'''
 
-	if observer['origin_id'] == new_edge['origin']:
-		observer['destin_id'] = new_edge['destin']
-	elif observer['destin_id'] == new_edge['destin']:
-		observer['origin_id'] = new_edge['origin']
+	print('qowehgpiuqhr-ghqpiwurhgiuqewrg')
+	print(new_edge)
+
+	if 'geometry' in new_edge:
+		origin = None
+		for destin in new_edge['geometry']:
+			if origin != None:
+				if utils.geometric_utils.point_belongs_to_line(
+					observer['point'],
+					[origin, destin]
+				):
+					observer['origin_id'] = new_edge['origin']
+					observer['destin_id'] = new_edge['destin']
+					observer['key'] = 0
+					return
+			origin = destin 
+	else:
+		origin = new_edge['origin']
+		destin = new_edge['destin']
+		if utils.geometric_utils.point_belongs_to_line(
+			observer['point'],[
+				[net.nodes[origin]['x'], net.nodes[origin]['y']],
+				[net.nodes[destin]['x'], net.nodes[destin]['y']]
+			]
+		):	
+			observer['origin_id'] = new_edge['origin']
+			observer['destin_id'] = new_edge['destin']
+			observer['key'] = 0
 
 
 def insert_point_as_node(net, node_id, point_info, observers=[]):
@@ -99,8 +125,11 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 		key = point_info['key']  
 	)
 
+	print('<<<<<>>>>>')
+	print(edge_to_intersect)
+
 	keep_attributes = {key:value for key, value in edge_to_intersect.items() if key not in [
-		'length', 'geometry', 'origin', 'destin'
+		'length', 'geometry', 'origin', 'destin', 'id'
 	]}
 
 	point = point_info['point']
@@ -169,7 +198,8 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 			**{
 				'length': distance_to_or,
 				'origin': point_info['origin_id'],
-				'destin': node_id
+				'destin': node_id,
+				# 'id': node_id
 			}, **keep_attributes
 		)
 
@@ -179,7 +209,8 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 			**{
 				'length': distance_to_de,
 				'origin': node_id,
-				'destin': point_info['destin_id']
+				'destin': point_info['destin_id'],
+				# 'id': point_info['destin_id']
 			}, **keep_attributes
 		)
 	else:
@@ -190,6 +221,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				'length': distance_to_or,
 				'origin': point_info['origin_id'],
 				'destin': node_id,
+				# 'id': node_id,
 				'geometry': or_geometry
 			}, **keep_attributes
 		)
@@ -200,6 +232,7 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				'length': distance_to_de,
 				'origin': node_id,
 				'destin': point_info['destin_id'],
+				# 'id': point_info['destin_id'],
 				'geometry': de_geometry
 			}, **keep_attributes
 		)
@@ -216,13 +249,13 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 				node_id,
 				key=0
 			)
-			new_edge_2 = net.get_edge_data(
+			new_edge_2 = net.get_edge_data(	
 				node_id,
 				point_info['destin_id'],
 				key=0
 			)
-			update_observer_edge(new_edge_1, observer)
-			update_observer_edge(new_edge_2, observer)
+			update_observer_edge(net, new_edge_1, observer)
+			update_observer_edge(net, new_edge_2, observer)
 
 
 def compute_distance_on_road_between(road_net, origin_point, destin_point):
@@ -235,8 +268,23 @@ def compute_distance_on_road_between(road_net, origin_point, destin_point):
 	global DEL
 	global ADD
 
+	destin_point_backup = destin_point.copy()
+
+	# print('First')
 	insert_point_as_node(road_net, 0, origin_point, observers=[destin_point])
-	insert_point_as_node(road_net, 1, destin_point)
+	# print('Second')
+	try:
+		insert_point_as_node(road_net, 1, destin_point)
+	except AttributeError:
+		print()
+		print(road_net.get_edge_data(destin_point['origin_id'], destin_point['destin_id']))
+		print(origin_point)
+		print(destin_point)
+		raise ValueError('Something went boom')
+
+	destin_point['origin_id'] = destin_point_backup['origin_id']
+	destin_point['destin_id'] = destin_point_backup['destin_id']
+	destin_point['key'] = destin_point_backup['key']
 
 	distance = 0
 
@@ -933,7 +981,7 @@ if __name__ == '__main__':
 
 	road_net = utils.json_utils.read_network_json(configs.TWEAKED_NETWORK)
 
-	stops_df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
+	stops_df = pd.read_csv('data/gtfs/carris/stops.txt', sep=',', decimal='.')
 	route_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
 
 	route_ids = []

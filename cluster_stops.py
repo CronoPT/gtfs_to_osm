@@ -41,44 +41,37 @@ def merge_stops(network, u, v):
 			[network.nodes[v]['x'], network.nodes[v]['y']]
 		]
 
-	nodes_to_remove = []
 	for pair in v_outs:
-		edge = network.get_edge_data(pair[0], pair[1])[0]
+		edges = network.get_edge_data(pair[0], pair[1])
+		for _, edge in edges.items():
 
-		# if network.get_edge_data(pair[1], pair[0]) != None:
-		# 	print('Warning2') 
+			edge_geo  = []
 
-		edge_geo  = []
+			if 'geometry' in v_outs:
+				edge_geo = edge['geometry']
+			else:
+				fleeting_geo = [
+					[network.nodes[v]['x'], network.nodes[v]['y']],
+					[network.nodes[edge['id']]['x'], network.nodes[edge['id']]['y']]
+				]
 
-		new_id = edge['id'] if edge['id'] not in replacements else replacements[edge['id']]
+			new_edge_geo = []
+			new_edge_geo.extend(fleeting_geo)
+			new_edge_geo.extend(edge_geo)
+			new_edge_geo = filter_duplicates(new_edge_geo)
 
-		if 'geometry' in v_outs:
-			edge_geo = edge['geometry']
-		else:
-			fleeting_geo = [
-				[network.nodes[v]['x'], network.nodes[v]['y']],
-				[network.nodes[new_id]['x'], network.nodes[new_id]['y']]
-			]
+			network.add_edge(u, edge['id'], **{
+				'geometry': new_edge_geo,
+				'length': edge['length']+fleeting['length'],
+				'id': edge['id']
+			})
 
-		new_edge_geo = []
-		new_edge_geo.extend(fleeting_geo)
-		new_edge_geo.extend(edge_geo)
-		new_edge_geo = filter_duplicates(new_edge_geo)
+			replacements[v] = u
+			for og, rep in replacements.items():
+				if rep == v:
+					replacements[og] = u
 
-		network.add_edge(u, new_id, **{
-			'geometry': new_edge_geo,
-			'length': edge['length']+fleeting['length'],
-			'id': new_id
-		})
-
-		replacements[v] = u
-		for og, rep in replacements.items():
-			if rep == v:
-				replacements[og] = u
-		nodes_to_remove.append(v)
-
-	for n in nodes_to_remove:
-		network.remove_node(n)
+	network.remove_node(v)
 
 
 if __name__ == '__main__':
@@ -91,6 +84,46 @@ if __name__ == '__main__':
 	valid = list(route_df['cod_paragem'].unique())
 
 	replacements = {}
+
+	# tweaked_network = utils.json_utils.read_network_json(configs.TWEAKED_NETWORK)
+
+	# point0 = [38.706295, -9.143219]
+	# point1 = [38.705911, -9.143187]
+	# point2 = [38.705801, -9.143223]
+	# point3 = [38.705678, -9.143217]
+	# point4 = [38.705544, -9.143223]
+	# point5 = [38.705358, -9.143273]
+
+	# node0 = int(ox.distance.get_nearest_node(network, point0))
+	# node1 = int(ox.distance.get_nearest_node(network, point1))
+	# node2 = int(ox.distance.get_nearest_node(network, point2))
+	# node3 = int(ox.distance.get_nearest_node(network, point3))
+	# node4 = int(ox.distance.get_nearest_node(network, point4))
+	# node5 = int(ox.distance.get_nearest_node(network, point5))
+
+	# print(f'[DEST] Node 0 -> {node0}')
+	# print(f'[STOP] Node 1 -> {node1}')
+	# print(f'[STOP] Node 2 -> {node2}')
+	# print(f'[STOP] Node 3 -> {node3}')
+	# print(f'[STOP] Node 4 -> {node4}')
+	# print(f'[ORIG] Node 5 -> {node5}')
+
+
+	# print(network.get_edge_data(node1, node2))
+	# print(network.get_edge_data(node2, node1))
+
+	# print(network.get_edge_data(node2, node3))
+	# print(network.get_edge_data(node3, node2))
+
+	# print(network.get_edge_data(node3, node4))
+	# print(network.get_edge_data(node4, node3))
+
+	# print(network.get_edge_data(node4, node5))
+	# print(network.get_edge_data(node5, node4))
+
+	# print(tweaked_network.get_edge_data(node0, node5))
+	# print(tweaked_network.get_edge_data(node5, node0))
+
 
 	for i, u in enumerate(stops):
 		for j, v in enumerate(stops):
