@@ -74,6 +74,62 @@ def merge_stops(network, u, v):
 	network.remove_node(v)
 
 
+def has_nothing_from_cluster(stop_out, cluster):
+	for out in stop_out:
+		if out in cluster:
+			return False
+	return True
+
+
+def merge_stops_in_cluster(network, cluster, replacements):
+	sequence = []
+	while len(cluster) != 0:
+		chosen = None
+		for stop in cluster:
+			stop_outs = [int(v) for _, v in network.out_edges(int(stop))]
+			if has_nothing_from_cluster(stop_outs, cluster):
+				chosen = stop
+				break
+		sequence.append(chosen)
+		cluster.remove(chosen)
+
+	for i in range(0, len(sequence)-1, 1):
+		merge_stops(network, sequence[i+1], sequence[i])
+
+	for i in sequence[:-1]:
+		replacements[i] = sequence[-1]
+
+
+def belongs_to_cluster(clusters, s):
+	for index, cluster in enumerate(clusters):
+		if s in cluster:
+			return index
+	return -1
+
+
+def squash_clusters(clusters, i1, i2):
+	c1 = clusters[i1]
+	c2 = clusters[i2]
+	clusters.remove(c1)
+	clusters.remove(c2)
+	c1.extend(c2)
+	clusters.append(c1)
+
+
+def cluster_stops(clusters, s1, s2):
+	cluster1 = belongs_to_cluster(clusters, s1)
+	cluster2 = belongs_to_cluster(clusters, s2)
+
+	if cluster1!=-1 and cluster2!=-1:
+		squash_clusters(clusters, cluster1, cluster2)
+	elif cluster1!=-1 and cluster2==-1:
+		clusters[cluster1].append(s2)
+	elif cluster1==-1 and cluster2!=-1:
+		clusters[cluster2].append(s1)
+	else:
+		clusters.append([s1, s2])
+
+
 if __name__ == '__main__':
 	network  = utils.json_utils.read_network_json(configs.NETWORK_WITH_STOPS)
 	routes   = utils.json_utils.read_json_object(configs.ROUTES_STOP_SEQUENCE)
@@ -81,70 +137,31 @@ if __name__ == '__main__':
 	route_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
 
 	stops = list(route_df['cod_paragem'].unique())
-	valid = list(route_df['cod_paragem'].unique())
 
 	replacements = {}
-
-	# tweaked_network = utils.json_utils.read_network_json(configs.TWEAKED_NETWORK)
-
-	# point0 = [38.706295, -9.143219]
-	# point1 = [38.705911, -9.143187]
-	# point2 = [38.705801, -9.143223]
-	# point3 = [38.705678, -9.143217]
-	# point4 = [38.705544, -9.143223]
-	# point5 = [38.705358, -9.143273]
-
-	# node0 = int(ox.distance.get_nearest_node(network, point0))
-	# node1 = int(ox.distance.get_nearest_node(network, point1))
-	# node2 = int(ox.distance.get_nearest_node(network, point2))
-	# node3 = int(ox.distance.get_nearest_node(network, point3))
-	# node4 = int(ox.distance.get_nearest_node(network, point4))
-	# node5 = int(ox.distance.get_nearest_node(network, point5))
-
-	# print(f'[DEST] Node 0 -> {node0}')
-	# print(f'[STOP] Node 1 -> {node1}')
-	# print(f'[STOP] Node 2 -> {node2}')
-	# print(f'[STOP] Node 3 -> {node3}')
-	# print(f'[STOP] Node 4 -> {node4}')
-	# print(f'[ORIG] Node 5 -> {node5}')
-
-
-	# print(network.get_edge_data(node1, node2))
-	# print(network.get_edge_data(node2, node1))
-
-	# print(network.get_edge_data(node2, node3))
-	# print(network.get_edge_data(node3, node2))
-
-	# print(network.get_edge_data(node3, node4))
-	# print(network.get_edge_data(node4, node3))
-
-	# print(network.get_edge_data(node4, node5))
-	# print(network.get_edge_data(node5, node4))
-
-	# print(tweaked_network.get_edge_data(node0, node5))
-	# print(tweaked_network.get_edge_data(node5, node0))
-
+	clusters = []
 
 	for i, u in enumerate(stops):
 		for j, v in enumerate(stops):
-			if u in valid and v in valid:
-				utils.general_utils.print_progress_bar(((i)*len(stops))+(j+1), len(stops)**2)
-				if (network.get_edge_data(u, v) != None) and single_connection(network, u, v):
-					try:
-						distance = nx.algorithms.shortest_paths.weighted.dijkstra_path_length(
-							network, 
-							source=u, 
-							target=v,
-							weight='length'
-						)
-					except nx.exception.NetworkXNoPath:
-						continue
-					if distance > 100:
-						continue
+			utils.general_utils.print_progress_bar(((i)*len(stops))+(j+1), len(stops)**2)
 
-					merge_stops(network, u, v)
-					valid.remove(v)
+			if (network.get_edge_data(u, v) != None) and single_connection(network, u, v):
+				try:
+					distance = nx.algorithms.shortest_paths.weighted.dijkstra_path_length(
+						network, 
+						source=u, 
+						target=v,
+						weight='length'
+					)
+				except nx.exception.NetworkXNoPath:
+					continue
+				if distance > 100:
+					continue
 
+				cluster_stops(clusters, u, v)
+
+	for cluster in clusters:
+		merge_stops_in_cluster(network, cluster, replacements)
 
 	stop_points = [s for s in stop_points if s['stop_id'] not in replacements]
 	for route in routes:
