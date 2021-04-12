@@ -28,48 +28,45 @@ def single_connection(network, u, v):
 def merge_stops(network, u, v):
 	global replacements
 
-	v_outs   = network.out_edges(v)
+	v_outs   = network.out_edges(v, data=True)
 	fleeting = network.get_edge_data(u, v, key=0) 
 
 	fleeting_geo = []
 
 	if 'geometry' in fleeting:
-		fleeting_geo = fleeting['geometry']
+		fleeting_geo.extend(fleeting['geometry'])
 	else:
 		fleeting_geo = [
 			[network.nodes[u]['x'], network.nodes[u]['y']],
 			[network.nodes[v]['x'], network.nodes[v]['y']]
 		]
 
-	for pair in v_outs:
-		edges = network.get_edge_data(pair[0], pair[1])
-		for _, edge in edges.items():
+	for e_u, e_v, edge_data in v_outs:
+		edge_geo  = []
 
-			edge_geo  = []
+		if 'geometry' in edge_data:
+			edge_geo.extend(edge_data['geometry'])
+		else:
+			fleeting_geo = [
+				[network.nodes[e_u]['x'], network.nodes[e_u]['y']],
+				[network.nodes[e_v]['x'], network.nodes[e_v]['y']]
+			]
 
-			if 'geometry' in v_outs:
-				edge_geo = edge['geometry']
-			else:
-				fleeting_geo = [
-					[network.nodes[v]['x'], network.nodes[v]['y']],
-					[network.nodes[edge['id']]['x'], network.nodes[edge['id']]['y']]
-				]
+		new_edge_geo = []
+		new_edge_geo.extend(fleeting_geo)
+		new_edge_geo.extend(edge_geo)
+		new_edge_geo = filter_duplicates(new_edge_geo)
 
-			new_edge_geo = []
-			new_edge_geo.extend(fleeting_geo)
-			new_edge_geo.extend(edge_geo)
-			new_edge_geo = filter_duplicates(new_edge_geo)
+		network.add_edge(u, e_v, **{
+			'geometry': new_edge_geo,
+			'length': edge_data['length']+fleeting['length'],
+			'id': e_v
+		})
 
-			network.add_edge(u, edge['id'], **{
-				'geometry': new_edge_geo,
-				'length': edge['length']+fleeting['length'],
-				'id': edge['id']
-			})
-
-			replacements[v] = u
-			for og, rep in replacements.items():
-				if rep == v:
-					replacements[og] = u
+		replacements[v] = u
+		for og, rep in replacements.items():
+			if rep == v:
+				replacements[og] = u
 
 	network.remove_node(v)
 
@@ -81,7 +78,8 @@ def has_nothing_from_cluster(stop_out, cluster):
 	return True
 
 
-def merge_stops_in_cluster(network, cluster, replacements):
+def merge_stops_in_cluster(network, cluster):
+	global replacements
 	sequence = []
 	while len(cluster) != 0:
 		chosen = None
@@ -161,7 +159,7 @@ if __name__ == '__main__':
 				cluster_stops(clusters, u, v)
 
 	for cluster in clusters:
-		merge_stops_in_cluster(network, cluster, replacements)
+		merge_stops_in_cluster(network, cluster)
 
 	stop_points = [s for s in stop_points if s['stop_id'] not in replacements]
 	for route in routes:
