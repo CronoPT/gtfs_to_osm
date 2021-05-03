@@ -167,6 +167,11 @@ if __name__ == '__main__':
 		                  for s in route['stops']]
 		route['stops'] = filter_duplicates(route['stops'])
 
+	final = {}
+	for key, map in replacements.items():
+		final[int(key)] = int(map)
+
+	utils.json_utils.write_json_object(configs.STOP_REPLACEMENTS, final)
 	utils.json_utils.write_json_object(configs.CLUSTERED_STOPS, stop_points)
 	utils.json_utils.write_json_object(configs.CLUSTERED_ROUTES, routes)
 	utils.json_utils.write_networkx_json(configs.FINAL_NETWORK, network)
