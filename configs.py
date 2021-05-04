@@ -85,14 +85,35 @@ STOP_LOCATIONS = 'data/geojson/stop_locations.geojson'
 '''
 NETWORK_WITH_STOPS = 'data/json/network_with_stops.json'
 
+'''
+| The road network with the bus stops already 
+| clustered. Loadeable into NetworkX.
+'''
 FINAL_NETWORK = 'data/json/final_network.json'
 
+'''
+| The stops that remained after clustering.
+'''
 CLUSTERED_STOPS = 'data/json/clustered_stop_locations.json'
 
+'''
+| The route stop sequences after clustering the stops.
+'''
 CLUSTERED_ROUTES = 'data/json/clustered_routes_stop_sequence.json'
 
+'''
+| A geojson file to visualize the stops after the clustering
+'''
 CLUSTERED_STOP_LOCATIONS = 'data/geojson/clustered_stop_locations.geojson'
 
+'''
+| A geojson file to visualize the route shapes after the 
+| bus stop clustering
+'''
 CLUSTERED_ROUTE_SHAPES = 'data/geojson/clustered_route_shapes.geojson'
 
+'''
+| For each removed stop in the clustering process, hold the cluster,
+| a stop_id, which the stop joined.
+'''
 STOP_REPLACEMENTS = 'data/json/stop_replacements.json'
