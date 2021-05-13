@@ -117,3 +117,16 @@ CLUSTERED_ROUTE_SHAPES = 'data/geojson/clustered_route_shapes.geojson'
 | a stop_id, which the stop joined.
 '''
 STOP_REPLACEMENTS = 'data/json/stop_replacements.json'
+
+'''
+| These are routes served by trams whihc is a mode of transportation
+| we are ignoring in this work.
+'''
+TRAM_ROUTES = [
+	# '15E',
+	# '12E',
+	# '18E',
+	# '24E',
+	# '25E',
+	# '28E'
+]

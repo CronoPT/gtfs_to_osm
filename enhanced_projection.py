@@ -141,8 +141,8 @@ if __name__ == '__main__':
 	lat_step = (max_lat-min_lat)/configs.DIVISIONS
 	lon_step = (max_lon-min_lon)/configs.DIVISIONS
 
-	stops_df = pd.read_csv('data/carris_gtfs/stops.txt', sep=',', decimal='.')
-	route_df = pd.read_csv('data/carris_gtfs/shapes.txt', sep=',', decimal='.')
+	stops_df = pd.read_csv('data/gtfs/carris/stops.txt', sep=',', decimal='.')
+	route_df = pd.read_csv('data/gtfs/carris/shapes.txt', sep=',', decimal='.')
 	outub_df = pd.read_csv('data/PercursosOutubro2019.csv', sep=';', decimal=',', low_memory=False)
 
 	stops = []

@@ -70,9 +70,6 @@ def update_observer_edge(net, new_edge, observer):
 	| introduced edge, the observer must be updated.
 	'''
 
-	print('qowehgpiuqhr-ghqpiwurhgiuqewrg')
-	print(new_edge)
-
 	if 'geometry' in new_edge:
 		origin = None
 		for destin in new_edge['geometry']:
@@ -124,9 +121,6 @@ def insert_point_as_node(net, node_id, point_info, observers=[]):
 		point_info['destin_id'],
 		key = point_info['key']  
 	)
-
-	print('<<<<<>>>>>')
-	print(edge_to_intersect)
 
 	keep_attributes = {key:value for key, value in edge_to_intersect.items() if key not in [
 		'length', 'geometry', 'origin', 'destin', 'id'
@@ -986,6 +980,9 @@ if __name__ == '__main__':
 
 	route_ids = []
 	stop_ids  = []
+
+	route_df = route_df[~route_df['carreira'].isin(configs.TRAM_ROUTES)]
+
 	for index, row in route_df.iterrows():
 		utils.general_utils.print_progress_bar(
 			index, 
