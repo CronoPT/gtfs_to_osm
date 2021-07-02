@@ -80,6 +80,14 @@ ROUTE_SHAPES = 'data/geojson/route_shapes.geojson'
 STOP_LOCATIONS = 'data/geojson/stop_locations.geojson'
 
 '''
+| QGIS is being used as a tool to visualize
+| geographic structers. This file will save 
+| a point for every bus stop location so we 
+| can then visualize them.
+'''
+ORIGINAL_STOP_LOCATIONS = 'data/geojson/original_stop_locations.geojson'
+
+'''
 | The network after having all the stop 
 | fixed projections as nodes in the network
 '''

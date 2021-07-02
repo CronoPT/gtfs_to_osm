@@ -136,6 +136,8 @@ if __name__ == '__main__':
 
 	stops = list(route_df['cod_paragem'].unique())
 
+	print(f'Stops before clustering: {len(stop_points)}')
+
 	replacements = {}
 	clusters = []
 
@@ -170,6 +172,8 @@ if __name__ == '__main__':
 	final = {}
 	for key, map in replacements.items():
 		final[int(key)] = int(map)
+
+	print(f'Stops after clustering: {len(stop_points)}')
 
 	utils.json_utils.write_json_object(configs.STOP_REPLACEMENTS, final)
 	utils.json_utils.write_json_object(configs.CLUSTERED_STOPS, stop_points)

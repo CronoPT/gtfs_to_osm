@@ -202,6 +202,7 @@ if __name__ == '__main__':
 	)
 
 	stop_mappings = []
+	stop_points   = []
 	for index, stop in enumerate(stops):
 		'''
 		| Now we well actually project the stations on the road.
@@ -222,6 +223,7 @@ if __name__ == '__main__':
 		stp = [lon, lat]
 		pjs = [] 
 
+		stop_points.append([lon, lat])
 		stp_x, stp_y = coord_to_square(lon, lat)
 		candidate_coords = [[stp_x, stp_y]]
 		
@@ -313,3 +315,4 @@ if __name__ == '__main__':
 	)
 
 	utils.json_utils.write_json_object(configs.CANDIDATE_MAPPINGS, stop_mappings)
+	utils.json_utils.write_geojson_points(configs.ORIGINAL_STOP_LOCATIONS, stop_points)
